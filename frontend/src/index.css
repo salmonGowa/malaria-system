@@ -1,0 +1,87 @@
+:root {
+  --bg: #0f1720;
+  --panel: #16212c;
+  --border: #24313d;
+  --text: #e6edf3;
+  --muted: #8fa1af;
+  --accent: #2fae8f;
+  --risk-high: #d9534f;
+  --risk-mid: #e0a83b;
+  --risk-low: #2fae8f;
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+nav.sidebar {
+  width: 220px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  padding: 24px 16px;
+  flex-shrink: 0;
+}
+
+nav.sidebar h1 {
+  font-size: 15px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 20px;
+}
+
+nav.sidebar a {
+  display: block;
+  color: var(--text);
+  text-decoration: none;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+nav.sidebar a:hover,
+nav.sidebar a.active {
+  background: var(--border);
+}
+
+main.content {
+  flex: 1;
+  padding: 32px;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.placeholder-note {
+  color: var(--muted);
+  font-size: 13px;
+  border-left: 3px solid var(--accent);
+  padding-left: 10px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
