@@ -1,0 +1,3 @@
+raster,variable,source,date,county_name
+../raw/chirps/chirps-v2.0.2026.06.tif,rainfall_mm,CHIRPS,2026-06,
+../raw/chirps/chirps-v2.0.2026.07.tif,rainfall_mm,CHIRPS,2026-07,

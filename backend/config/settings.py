@@ -16,6 +16,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.gis",  # PostGIS support for county/facility geometry
     "rest_framework",
+    "rest_framework.authtoken",
     "django_filters",
     "corsheaders",
     "cases",
@@ -83,6 +84,16 @@ REST_FRAMEWORK = {
     "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,
+    # Token, not session+CSRF: the frontend is a cross-origin SPA (Vite dev
+    # server on a different port, and a different origin again once
+    # deployed), and token auth sends a plain Authorization header rather
+    # than relying on cookies — no CSRF dance needed for a pure API client.
+    # SessionAuthentication stays enabled too so /api/ browses normally
+    # from a logged-in-to-/admin/ browser tab.
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.TokenAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+    ],
 }
 
 CORS_ALLOW_ALL_ORIGINS = DEBUG  # tighten before any real deployment

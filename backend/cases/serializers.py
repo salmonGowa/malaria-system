@@ -1,20 +1,42 @@
+import json
+
 from rest_framework import serializers
 
-from .models import CaseReport, ClimateObservation, County, ForecastRun, HealthFacility, VaccineAllocation
+from .models import (
+    CaseReport,
+    ClimateObservation,
+    County,
+    ForecastRun,
+    HealthFacility,
+    HistoricalCaseData,
+    VaccineAllocation,
+)
 
 
 class CountySerializer(serializers.ModelSerializer):
+    # Plain dict, not GeoJSONField from djangorestframework-gis (not a project
+    # dependency) — GEOSGeometry already has a .geojson property, so this is
+    # just parsing that back into a JSON-serializable dict.
+    boundary = serializers.SerializerMethodField()
+
     class Meta:
         model = County
-        fields = ["id", "name", "code", "is_endemic_focus", "population"]
+        fields = ["id", "name", "code", "is_endemic_focus", "population", "boundary"]
+
+    def get_boundary(self, obj):
+        return json.loads(obj.boundary.geojson) if obj.boundary else None
 
 
 class HealthFacilitySerializer(serializers.ModelSerializer):
     county_name = serializers.CharField(source="county.name", read_only=True)
+    location = serializers.SerializerMethodField()
 
     class Meta:
         model = HealthFacility
-        fields = ["id", "name", "county", "county_name", "level", "kmhfl_code"]
+        fields = ["id", "name", "county", "county_name", "level", "kmhfl_code", "location"]
+
+    def get_location(self, obj):
+        return json.loads(obj.location.geojson) if obj.location else None
 
 
 class CaseReportSerializer(serializers.ModelSerializer):
@@ -40,16 +62,23 @@ class CaseReportSerializer(serializers.ModelSerializer):
             "record_hash",
         ]
         read_only_fields = ["reported_by", "created_at", "previous_hash", "record_hash"]
-
-    def create(self, validated_data):
-        validated_data["reported_by"] = self.context["request"].user
-        return super().create(validated_data)
+        # Note: this serializer is validation/representation only. Creation
+        # (stamping `reported_by`, calling CaseReport.objects.create) happens in
+        # CaseReportController -> CaseReportService, not here.
 
 
 class ClimateObservationSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClimateObservation
         fields = ["id", "county", "observation_date", "rainfall_mm", "temperature_c", "humidity_pct", "source"]
+
+
+class HistoricalCaseDataSerializer(serializers.ModelSerializer):
+    county_name = serializers.CharField(source="county.name", read_only=True)
+
+    class Meta:
+        model = HistoricalCaseData
+        fields = ["id", "county", "county_name", "period_start", "confirmed_cases", "source"]
 
 
 class ForecastRunSerializer(serializers.ModelSerializer):

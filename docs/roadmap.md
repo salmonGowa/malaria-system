@@ -1,28 +1,40 @@
 # Roadmap
 
-Mapped to the proposal's Chapter 1.10 schedule. This scaffold covers the
-repo/schema groundwork that sits underneath Tasks 1-2; everything below is
-still ahead of you.
+Mapped to the proposal's Chapter 1.10 schedule.
 
-| Proposal task | What it needs, concretely | Depends on |
+| Proposal task | Status | Notes |
 |---|---|---|
-| Task 3: Data collection & preprocessing | Get MAP case data + CHIRPS/ERA5 climate data into the DB for 2-3 pilot counties (see `docs/data-sources.md`); write `data/scripts/aggregate_climate.py` | This scaffold's models |
-| Task 4: Compartmental model | SEIR (or SEIR + mosquito vector compartments) in `ml_service/app/`, solved with `scipy.integrate.odeint`/`solve_ivp`; used as the forecasting benchmark named in 3.4 | Task 3 data |
-| Task 5: ML model | Replace `naive_forecast()` in `ml_service/app/forecasting.py` with a trained XGBoost (or Random Forest) model per Khan/Ajadi/Hossain 2024 methodology; cross-validate, compare to SEIR baseline | Task 3 data |
-| Task 6: Allocation module | Already implemented (`ml_service/app/allocation.py`) — wire it to real forecasts instead of request-supplied risk scores; add a Django endpoint that calls `ml_service` and stores a `VaccineAllocation` | Task 5 model |
-| Task 7: Dashboard | Charts for case trends and risk (a line/bar chart library — recharts or similar — isn't installed yet), forms for case-report submission, allocation trigger UI | Task 6 |
-| Task 8: Testing & validation | Extend `backend/cases/tests.py`; add `ml_service` tests (Pytest) for the forecast/allocation endpoints; k-fold CV reporting for the trained model | All above |
+| Task 3: Data collection & preprocessing | **Done** | `data/scripts/aggregate_climate.py` (real CHIRPS, 5 counties x 60 months), `generate_synthetic_case_history.py` + `generate_synthetic_climatology.py` (synthetic, clearly source-tagged — see `docs/data-sources.md` for why case history isn't real yet), `load_county_boundaries.py` (real GADM geometry) |
+| Task 4: Compartmental model | **Done** | `ml_service/app/compartmental.py` — rainfall-driven SEIR, `scipy.integrate.solve_ivp` + `scipy.optimize.least_squares`, used as Objective 2's benchmark. Separate from `app/simulation.py`, the interactive illustrative one behind the dashboard — that's unchanged |
+| Task 5: ML model | **Done, honestly short of the 0.8 target** | `data/scripts/train_forecast_model.py` — XGBoost classifier+regressor, k-fold CV + held-out test, benchmarked against Task 4's SEIR. AUC 0.716 (target 0.8), beats SEIR (0.574) and a climate-free baseline (0.660). See `docs/architecture.md`'s "Model results" for the honest why and the real fix (real data) |
+| Task 6: Allocation module | **Backend done, no frontend trigger yet** | `allocation.py`'s LP now wired to real stored forecasts via `ForecastGenerationService`/`AllocationGenerationService` + `POST /api/forecasts/generate/` and `/api/allocations/generate/` — verified end-to-end against the live model. No dashboard button yet: those endpoints require auth and the frontend has no login flow at all, so a button would just 403 |
+| Task 7: Dashboard | **Mostly done** | Charts, map (real county boundaries), allocation/forecast tables, theming, responsive layout all built. Missing: case-report submission form, forecast/allocation trigger UI (blocked on Task 6's auth gap above) |
+| Task 8: Testing & validation | **Partially done** | `backend/cases/tests.py` covers the hash chain, climate aggregation (incl. two real bugs found+fixed this pass), and the generation services (mocked ml_service). `ml_service/tests/` is new — allocation, features, compartmental, forecasting, and endpoint-level tests, 20 passing. Not done: k-fold CV *reporting* as a standing artifact (currently just printed by the training script) and frontend (Jest) tests |
 
-## Immediate next actions (in order)
+## What actually changed vs. the original scaffold
 
-1. Run `docker compose up --build`, confirm all four services come up, run
-   migrations, create a superuser, add a couple of counties via `/admin/`.
-2. Pick 2-3 pilot counties (lake-region or coastal, per the proposal's scope) and
-   pull their MAP + CHIRPS/ERA5 data manually first, before automating — confirms
-   the data actually looks reasonable before building a pipeline around it.
-3. `data/scripts/aggregate_climate.py` to load that into `ClimateObservation`.
-4. SEIR baseline in `ml_service` — gives you Task 4's deliverable and a benchmark
-   for Task 5.
+This file used to describe Tasks 4-8 as entirely unbuilt. They're now
+mostly built, checked against real execution (not just written), and
+committed alongside the honest numbers rather than numbers massaged to hit
+the proposal's targets. The two real gaps left are: (1) real historical
+case data — Objective 1's "5 years of monthly data" is currently a
+synthetic series driven by real CHIRPS rainfall, not observed case counts,
+because DHIS2/KEMRI access at that depth isn't available within this
+project's timeline (see `docs/data-sources.md`); (2) a frontend auth flow,
+which the forecast/allocation trigger buttons need before they can be built
+for real rather than as something that 403s.
 
-Ask when you're ready for any of these — the SEIR model and the climate
-aggregation script are both good next pieces to build now that the scaffold runs.
+## Suggested next actions, in order
+
+1. **Auth flow** (frontend login + token/session handling) — unblocks
+   Task 6/7's trigger UI, which is otherwise the most visible remaining gap.
+2. **Frontend trigger UI** once (1) exists: "Generate forecast" /
+   "Run allocation" buttons calling the endpoints described in
+   `docs/architecture.md`'s "Generating real forecasts/allocations" section.
+3. **Real case data**, if/when DHIS2 or KEMRI access comes through — swap
+   `generate_synthetic_case_history.py`'s output for the real thing; nothing
+   downstream (features, training, forecasting) needs to change, since both
+   just read `HistoricalCaseData` regardless of its `source`.
+4. **Case-report submission form** — the API already accepts authenticated
+   POSTs to `/api/case-reports/` (hash-chained, append-only); it just needs
+   a UI, same auth dependency as (1).

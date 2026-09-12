@@ -6,3 +6,8 @@ dist/
 *.sqlite3
 .DS_Store
 /backend/staticfiles/
+/logs/
+
+# Raw CHIRPS/ERA5 rasters — large binaries pulled by data/scripts/, not
+# source code. Re-fetch with the commands in data/README.md.
+/data/raw/

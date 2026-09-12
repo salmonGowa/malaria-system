@@ -126,6 +126,40 @@ class CaseReport(models.Model):
         return self.record_hash == self._compute_hash()
 
 
+class HistoricalCaseData(models.Model):
+    """Monthly county-level case counts used to train/evaluate the forecasting
+    model. Deliberately NOT part of CaseReport's hash chain: that chain exists
+    to make the *live* facility reporting trail tamper-evident, and backfilling
+    it with years of bulk historical/modelled figures would blur exactly the
+    distinction it exists to preserve — an auditor reading the chain should
+    find only real, individually-attributed facility submissions there.
+
+    Kenya's live reporting systems don't have county-level monthly history at
+    the 5-year depth this project's forecasting objective needs (see
+    docs/data-sources.md), so this table's `source` field always records
+    exactly where each row's number came from, including "synthetic_v1" for
+    modelled rows — so a synthetic figure is never mistaken for an observed
+    one. See data/scripts/generate_synthetic_case_history.py for how
+    synthetic rows are produced and exactly what they're calibrated against.
+    """
+
+    county = models.ForeignKey(County, on_delete=models.CASCADE, related_name="historical_case_data")
+    period_start = models.DateField(help_text="First day of the month this observation covers")
+    confirmed_cases = models.FloatField(help_text="Confirmed cases for the month (observed or modelled)")
+    source = models.CharField(max_length=100, help_text="e.g. synthetic_v1, MAP, WHO, DHIS2")
+
+    class Meta:
+        ordering = ["county__name", "period_start"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["county", "period_start", "source"], name="unique_historical_case_per_source"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.county} — {self.period_start:%Y-%m} ({self.source}): {self.confirmed_cases:.0f}"
+
+
 class ClimateObservation(models.Model):
     county = models.ForeignKey(County, on_delete=models.CASCADE, related_name="climate_observations")
     observation_date = models.DateField()

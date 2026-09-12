@@ -1,0 +1,7 @@
+# Tooling for data/scripts/ — climate raster aggregation and (later) other
+# offline data-prep jobs. Installed into the same shared venv (env/) the
+# backend and ml_service use; not needed by either service at request time.
+rasterio==1.5.1
+geopandas==1.1.4
+shapely==2.1.2
+numpy==2.5.3

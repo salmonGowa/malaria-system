@@ -3,6 +3,40 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#0b1119" />
+    <meta
+      name="description"
+      content="Malaria case tracking, outbreak forecasting, and vaccine allocation dashboard."
+    />
+    <!--
+      Set the theme attribute before first paint so there's no flash of the
+      wrong theme while React boots. Kept in sync with src/lib/theme.tsx.
+    -->
+    <script>
+      (function () {
+        try {
+          var KEY = "malaria-dashboard-theme";
+          var stored = localStorage.getItem(KEY);
+          var theme =
+            stored === "light" || stored === "dark"
+              ? stored
+              : window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+          document.documentElement.setAttribute("data-theme", theme);
+          document.documentElement.style.colorScheme = theme;
+        } catch (e) {
+          /* localStorage/matchMedia unavailable — CSS falls back to prefers-color-scheme */
+        }
+      })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
     <title>Malaria Tracking &amp; Forecasting Dashboard</title>
   </head>
   <body>
