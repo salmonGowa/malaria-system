@@ -21,3 +21,6 @@ class CaseReportController:
             validated_data=serializer.validated_data,
             reported_by=request.user,
         )
+
+    def verify_chain(self, request):
+        return self.service.verify_chain()

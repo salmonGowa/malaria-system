@@ -26,20 +26,51 @@ from .serializers import (
 # services/, not here.
 
 
-class CountyViewSet(viewsets.ReadOnlyModelViewSet):
+class CountyViewSet(
+    mixins.CreateModelMixin,
+    mixins.UpdateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Create/update, no delete — a county with case reports, facilities, or
+    forecasts attached can't be removed anyway (PROTECT on those FKs).
+    `boundary` isn't settable here (see CountySerializer): geometry comes
+    from data/scripts/load_county_boundaries.py, not a hand-typed form."""
+
     serializer_class = CountySerializer
+    permission_classes = [IsAuthenticatedOrReadOnly]
     filterset_fields = ["is_endemic_focus"]
 
     def get_queryset(self):
         return CountyController().list_queryset(self.request)
 
+    def perform_create(self, serializer):
+        serializer.instance = CountyController().create(serializer)
 
-class HealthFacilityViewSet(viewsets.ReadOnlyModelViewSet):
+    def perform_update(self, serializer):
+        serializer.instance = CountyController().update(serializer.instance, serializer)
+
+
+class HealthFacilityViewSet(
+    mixins.CreateModelMixin,
+    mixins.UpdateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
     serializer_class = HealthFacilitySerializer
+    permission_classes = [IsAuthenticatedOrReadOnly]
     filterset_fields = ["county", "level"]
 
     def get_queryset(self):
         return HealthFacilityController().list_queryset(self.request)
+
+    def perform_create(self, serializer):
+        serializer.instance = HealthFacilityController().create(serializer)
+
+    def perform_update(self, serializer):
+        serializer.instance = HealthFacilityController().update(serializer.instance, serializer)
 
 
 class CaseReportViewSet(
@@ -57,6 +88,13 @@ class CaseReportViewSet(
 
     def perform_create(self, serializer):
         serializer.instance = CaseReportController().create(serializer, self.request)
+
+    @action(detail=False, methods=["get"])
+    def verify_chain(self, request):
+        """GET /api/case-reports/verify_chain/ — walk the whole hash chain
+        and confirm it hasn't been tampered with. See
+        CaseReportService.verify_chain for what "valid" actually checks."""
+        return Response(CaseReportController().verify_chain(request))
 
 
 class ClimateObservationViewSet(viewsets.ReadOnlyModelViewSet):

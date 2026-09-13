@@ -89,6 +89,25 @@ def _simulate_months(params: SEIRParams, initial_state, rainfall_sequence):
     return monthly_reported, (S, E, I, R)
 
 
+def initial_state_for(population, initial_infectious_frac=1e-4):
+    """The (S, E, I, R) starting split `fit_county`/`forecast` use by default
+    — exposed so a caller that wants to replay a fit over its own window
+    (e.g. app/upload_simulation.py, to show "how well does this fit the data
+    I gave it") starts from the exact same state the calibration did,
+    instead of guessing at it."""
+    i0 = max(initial_infectious_frac * population, 1.0)
+    return (population - i0, 0.0, i0, 0.0)
+
+
+def simulate_series(params: SEIRParams, initial_state, rainfall_sequence):
+    """Public entry point for replaying an already-fit model over a rainfall
+    sequence — a thin, documented wrapper around _simulate_months for
+    callers outside this module (internal callers below use the private
+    function directly, which is fine, they're in on the contract)."""
+    monthly_reported, _ = _simulate_months(params, initial_state, rainfall_sequence)
+    return monthly_reported
+
+
 def fit_county(population, rainfall_sequence, observed_cases, initial_infectious_frac=1e-4):
     """Calibrate (beta0, k, reporting_fraction) by least-squares against one
     county's TRAINING-window rainfall/case series only.
@@ -103,8 +122,7 @@ def fit_county(population, rainfall_sequence, observed_cases, initial_infectious
         raise ValueError("Need at least 4 months of training data to calibrate a 3-parameter SEIR fit")
 
     n = population
-    i0 = max(initial_infectious_frac * n, 1.0)
-    initial_state = (n - i0, 0.0, i0, 0.0)
+    initial_state = initial_state_for(n, initial_infectious_frac)
     observed = np.asarray(observed_cases, dtype=float)
 
     def residuals(x):

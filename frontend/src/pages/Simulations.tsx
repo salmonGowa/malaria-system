@@ -12,11 +12,13 @@ import {
 import LabeledSlider from "../components/LabeledSlider";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { formatCompact, formatNumber } from "../lib/format";
+import { useLanguage } from "../lib/i18n";
 
 export default function Simulations() {
+  const { t } = useLanguage();
   return (
     <div>
-      <h2>Simulations</h2>
+      <h2>{t("page.simulations")}</h2>
       <p className="placeholder-note">
         Both panels below call the ml_service directly and recompute live as you drag —
         nothing here is saved to the database.

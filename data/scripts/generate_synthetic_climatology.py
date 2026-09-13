@@ -53,7 +53,16 @@ COUNTY_CLIMATOLOGY = {
     "Siaya": {"temp_mean": 23.5, "temp_amp": 1.5, "humidity_mean": 66, "humidity_amp": 8},
     "Homa Bay": {"temp_mean": 22.5, "temp_amp": 1.5, "humidity_mean": 67, "humidity_amp": 8},
     "Busia": {"temp_mean": 23.0, "temp_amp": 1.3, "humidity_mean": 70, "humidity_amp": 7},
+    "Migori": {"temp_mean": 22.0, "temp_amp": 1.5, "humidity_mean": 68, "humidity_amp": 8},
+    "Kakamega": {"temp_mean": 21.5, "temp_amp": 1.4, "humidity_mean": 72, "humidity_amp": 7},
+    "Vihiga": {"temp_mean": 20.5, "temp_amp": 1.5, "humidity_mean": 73, "humidity_amp": 7},
+    "Bungoma": {"temp_mean": 21.0, "temp_amp": 1.6, "humidity_mean": 70, "humidity_amp": 7},
+    "Kisii": {"temp_mean": 19.5, "temp_amp": 1.8, "humidity_mean": 72, "humidity_amp": 7},  # higher altitude — cooler
+    "Nyamira": {"temp_mean": 19.0, "temp_amp": 1.8, "humidity_mean": 73, "humidity_amp": 7},
     "Kilifi": {"temp_mean": 26.5, "temp_amp": 2.2, "humidity_mean": 78, "humidity_amp": 6},
+    "Kwale": {"temp_mean": 26.0, "temp_amp": 2.0, "humidity_mean": 79, "humidity_amp": 6},
+    "Mombasa": {"temp_mean": 27.0, "temp_amp": 1.8, "humidity_mean": 78, "humidity_amp": 5},  # urban coastal
+    "Taita Taveta": {"temp_mean": 24.5, "temp_amp": 2.5, "humidity_mean": 62, "humidity_amp": 9},  # semi-arid hinterland
 }
 
 # Relative seasonal shape, one value per calendar month (Jan..Dec), shared

@@ -4,4 +4,4 @@ from .base import ReadOnlyService
 
 class VaccineAllocationService(ReadOnlyService):
     model = VaccineAllocation
-    select_related = ("county",)
+    select_related = ("county", "generated_by")

@@ -2,9 +2,11 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { LogOutIcon, UserIcon } from "./icons";
 import { useAuth } from "../lib/auth";
+import { useLanguage } from "../lib/i18n";
 
 export default function AuthWidget() {
   const { username, checking, login, logout } = useAuth();
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [usernameInput, setUsernameInput] = useState("");
   const [password, setPassword] = useState("");
@@ -55,7 +57,7 @@ export default function AuthWidget() {
           <UserIcon size={14} />
           {username}
         </span>
-        <button type="button" className="icon-button" onClick={logout} aria-label="Sign out" title="Sign out">
+        <button type="button" className="icon-button" onClick={logout} aria-label={t("common.signOut")} title={t("common.signOut")}>
           <LogOutIcon size={16} />
         </button>
       </div>
@@ -66,13 +68,13 @@ export default function AuthWidget() {
     <div className="auth-widget" ref={rootRef}>
       <button type="button" className="btn btn-secondary btn-sm" onClick={() => setOpen((v) => !v)}>
         <UserIcon size={14} />
-        <span>Sign in</span>
+        <span>{t("common.signIn")}</span>
       </button>
       {open && (
-        <div className="popover auth-popover" role="dialog" aria-label="Sign in">
+        <div className="popover auth-popover" role="dialog" aria-label={t("common.signIn")}>
           <form onSubmit={handleSubmit}>
             <label className="field">
-              <span className="field-label">Username</span>
+              <span className="field-label">{t("common.username")}</span>
               <input
                 type="text"
                 value={usernameInput}
@@ -83,7 +85,7 @@ export default function AuthWidget() {
               />
             </label>
             <label className="field">
-              <span className="field-label">Password</span>
+              <span className="field-label">{t("common.password")}</span>
               <input
                 type="password"
                 value={password}
@@ -94,7 +96,7 @@ export default function AuthWidget() {
             </label>
             {error && <p className="field-error">{error}</p>}
             <button type="submit" className="btn btn-primary btn-sm btn-block" disabled={submitting}>
-              {submitting ? "Signing in…" : "Sign in"}
+              {submitting ? t("common.signingIn") : t("common.signIn")}
             </button>
           </form>
         </div>

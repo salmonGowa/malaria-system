@@ -1,5 +1,5 @@
 {
-  "trained_at": "2026-09-12T11:29:04.172292Z",
+  "trained_at": "2026-09-13T05:42:03.279549+00:00",
   "model_name": "xgboost_v1",
   "feature_names": [
     "cases_lag1",
@@ -17,62 +17,107 @@
     "humidity_lag1"
   ],
   "counties": [
+    "Bungoma",
     "Busia",
     "Homa Bay",
+    "Kakamega",
     "Kilifi",
+    "Kisii",
     "Kisumu",
-    "Siaya"
+    "Kwale",
+    "Migori",
+    "Mombasa",
+    "Nyamira",
+    "Siaya",
+    "Taita Taveta",
+    "Vihiga"
   ],
   "test_months": 12,
   "cv_folds": 5,
-  "cv_mean_auc": 0.6765444015444014,
-  "cv_mean_accuracy": 0.8266666666666665,
+  "cv_mean_auc": 0.6737757241261283,
+  "cv_mean_accuracy": 0.7587301587301587,
   "held_out_test_metrics": {
-    "accuracy": 0.8833333333333333,
-    "auc": 0.7160493827160495,
-    "sensitivity": 0.16666666666666666,
-    "specificity": 0.9629629629629629,
-    "n": 60,
-    "n_positive": 6
+    "accuracy": 0.8333333333333334,
+    "auc": 0.6591787439613527,
+    "sensitivity": 0.3,
+    "specificity": 0.9492753623188406,
+    "n": 168,
+    "n_positive": 30
   },
-  "held_out_test_mae_cases": 9872.188818359375,
+  "held_out_test_mae_cases": 10345.330669584728,
   "climate_free_baseline_metrics": {
-    "accuracy": 0.7666666666666667,
-    "auc": 0.6604938271604939,
-    "sensitivity": 0.16666666666666666,
-    "specificity": 0.8333333333333334,
-    "n": 60,
-    "n_positive": 6
+    "accuracy": 0.7559523809523809,
+    "auc": 0.5669082125603865,
+    "sensitivity": 0.36666666666666664,
+    "specificity": 0.8405797101449275,
+    "n": 168,
+    "n_positive": 30
   },
-  "climate_contribution_to_auc": 0.05555555555555558,
+  "climate_contribution_to_auc": 0.0922705314009662,
   "seir_benchmark_metrics": {
-    "accuracy": 0.7666666666666667,
-    "auc": 0.5740740740740741,
-    "sensitivity": 0.0,
-    "specificity": 0.8518518518518519,
-    "n": 60,
-    "n_positive": 6
+    "accuracy": 0.7261904761904762,
+    "auc": 0.5190821256038647,
+    "sensitivity": 0.13333333333333333,
+    "specificity": 0.855072463768116,
+    "n": 168,
+    "n_positive": 30
   },
   "county_baselines": {
+    "KEN-039": {
+      "mean": 42891.0,
+      "std": 19576.282630392318
+    },
     "KEN-040": {
       "mean": 39288.708333333336,
       "std": 14895.904094412348
     },
     "KEN-043": {
-      "mean": 43468.8125,
-      "std": 17513.183421897073
+      "mean": 44730.791666666664,
+      "std": 18022.033405850663
     },
-    "KEN-047": {
-      "mean": 18063.666666666668,
-      "std": 8688.069612820918
+    "KEN-037": {
+      "mean": 66361.54166666667,
+      "std": 26988.414860947232
+    },
+    "KEN-003": {
+      "mean": 17183.041666666668,
+      "std": 7534.612271483997
+    },
+    "KEN-045": {
+      "mean": 13844.145833333334,
+      "std": 5635.016858853749
     },
     "KEN-042": {
-      "mean": 19618.208333333332,
-      "std": 7812.290447745178
+      "mean": 37186.0625,
+      "std": 14800.580562101624
+    },
+    "KEN-002": {
+      "mean": 15465.645833333334,
+      "std": 6816.611482528005
+    },
+    "KEN-044": {
+      "mean": 40847.666666666664,
+      "std": 16487.62496962158
+    },
+    "KEN-001": {
+      "mean": 6853.541666666667,
+      "std": 3787.9499785412363
+    },
+    "KEN-046": {
+      "mean": 6168.895833333333,
+      "std": 2512.9462807594273
     },
     "KEN-041": {
-      "mean": 42423.875,
-      "std": 16282.155688340994
+      "mean": 44352.9375,
+      "std": 17021.80897090339
+    },
+    "KEN-006": {
+      "mean": 2505.25,
+      "std": 1305.1473655619634
+    },
+    "KEN-038": {
+      "mean": 20512.479166666668,
+      "std": 7786.339838646866
     }
   },
   "training_data_disclaimer": "confirmed_cases used for training/evaluation comes from HistoricalCaseData source=synthetic_v1 \u2014 a generated series driven by real CHIRPS rainfall, not observed case counts. See data/scripts/generate_synthetic_case_history.py."

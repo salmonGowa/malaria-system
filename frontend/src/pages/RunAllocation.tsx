@@ -6,6 +6,7 @@ import CountyPicker from "../components/CountyPicker";
 import { UserIcon } from "../components/icons";
 import { useAuth } from "../lib/auth";
 import { formatNumber } from "../lib/format";
+import { useLanguage } from "../lib/i18n";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -18,11 +19,13 @@ function addWeeksIso(iso: string, weeks: number): string {
 }
 
 export default function RunAllocation() {
+  const { t } = useLanguage();
   const { username } = useAuth();
   const [counties, setCounties] = useState<County[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [totalDoses, setTotalDoses] = useState(50000);
   const [periodStart, setPeriodStart] = useState(todayIso());
+  const [maxSharePct, setMaxSharePct] = useState(100);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<VaccineAllocation[] | null>(null);
@@ -52,6 +55,7 @@ export default function RunAllocation() {
         county_ids: [...selected],
         period_start: periodStart,
         period_end: addWeeksIso(periodStart, 4),
+        max_share_per_county: maxSharePct / 100,
       });
       setCreated(res);
     } catch (err) {
@@ -63,7 +67,7 @@ export default function RunAllocation() {
 
   return (
     <div>
-      <h2>Run Allocation</h2>
+      <h2>{t("page.runAllocation")}</h2>
       <p className="placeholder-note">
         Solves the risk-weighted allocation LP (ml_service/app/allocation.py) against each selected county's{" "}
         <em>latest stored forecast</em> — see <Link to="/generate-forecast">Generate Forecast</Link> first if a
@@ -96,12 +100,28 @@ export default function RunAllocation() {
               <input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} disabled={!username} />
               <span className="field-hint">4-week period, ending {addWeeksIso(periodStart, 4)}</span>
             </label>
+            <label className="field">
+              <span className="field-label">Max. share per county</span>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={maxSharePct}
+                onChange={(e) => setMaxSharePct(Number(e.target.value))}
+                disabled={!username}
+              />
+              <span className="field-hint">
+                {maxSharePct >= 100
+                  ? "100% = no cap — a linear objective concentrates doses in the single highest-risk county (see docs/architecture.md)"
+                  : `No county gets more than ${maxSharePct}% of total doses — forces spread across multiple counties`}
+              </span>
+            </label>
           </div>
 
           {error && <p className="form-banner-error">{error}</p>}
 
           <button type="submit" className="btn btn-primary" disabled={!username || submitting}>
-            {submitting ? "Allocating…" : "Run allocation"}
+            {submitting ? t("common.allocating") : t("common.runAllocation")}
           </button>
         </form>
 

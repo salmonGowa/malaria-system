@@ -44,7 +44,7 @@ class ForecastGenerationService:
 
         return cases, rainfall, temperature, humidity
 
-    def generate_for_county(self, county, as_of_date, horizon_weeks=4):
+    def generate_for_county(self, county, as_of_date, horizon_weeks=4, generated_by=None):
         cases, rainfall, temperature, humidity = self._recent_history(county, as_of_date)
         payload = {
             "county_code": county.code,
@@ -74,16 +74,17 @@ class ForecastGenerationService:
             risk_score=data["risk_score"],
             model_name=data["model_name"],
             model_version=data["model_version"],
+            generated_by=generated_by,
         )
 
-    def generate_for_counties(self, counties, as_of_date, horizon_weeks=4):
+    def generate_for_counties(self, counties, as_of_date, horizon_weeks=4, generated_by=None):
         """Never raises on one county's failure — a batch trigger across
         every county shouldn't abort because one has too little history.
         Returns (created: list[ForecastRun], errors: list[dict])."""
         created, errors = [], []
         for county in counties:
             try:
-                created.append(self.generate_for_county(county, as_of_date, horizon_weeks))
+                created.append(self.generate_for_county(county, as_of_date, horizon_weeks, generated_by=generated_by))
             except (ForecastGenerationError, KeyError, ValueError) as exc:
                 errors.append({"county_code": county.code, "county_name": county.name, "error": str(exc)})
         return created, errors

@@ -19,18 +19,28 @@
   --border-strong: #cbd5e1;
   --text: #101828;
   --text-secondary: #344054;
-  --muted: #667085;
+  /* Darkened from the original #667085 (4.42:1 on --panel-muted, just under
+     the 4.5:1 AA text threshold — caught by an axe-core scan across every
+     page, since this token backs .field-hint and similar low-emphasis
+     text everywhere). #5b6b7d clears 4.5:1 on both --panel and
+     --panel-muted with margin. */
+  --muted: #5b6b7d;
 
   --accent: #14a37f;
-  --accent-strong: #0b7d5f;
-  --accent-text: #0b7d5f;
+  --accent-strong: #086b52;
+  /* Darkened from #0b7d5f (4.48:1 on --accent-soft — same axe-core finding
+     as --muted above, on .nav-link.active and similar accent-on-soft-bg
+     text) to #086b52, which clears 4.5:1 with margin. */
+  --accent-text: #086b52;
   --accent-soft: rgba(20, 163, 127, 0.12);
 
   --risk-high: #d92d20;
   --risk-high-soft: rgba(217, 45, 32, 0.1);
   --risk-mid: #b54708;
   --risk-mid-soft: rgba(181, 71, 8, 0.1);
-  --risk-low: #0b7d5f;
+  /* Same color/fix as --accent-text above (they were already identical) —
+     fixes .priority-badge-low's 3.97:1 on --risk-low-soft. */
+  --risk-low: #086b52;
   --risk-low-soft: rgba(11, 125, 95, 0.1);
 
   /* Categorical chart series — validated palette (dataviz skill), slots 1-3
@@ -150,6 +160,43 @@ body {
 ::selection {
   background: var(--accent-soft);
   color: var(--text);
+}
+
+/* Visually hidden but present for screen readers — e.g. a table header
+   whose column (like a row of "Correct" action buttons) has no visible
+   label of its own. Never use display:none/visibility:hidden here — those
+   also hide it from assistive tech, defeating the point. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Visible only when the element it's on receives keyboard focus — for a
+   "skip to content" link that would otherwise sit oddly at the top of
+   every page for sighted mouse users. */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 12px;
+  z-index: 100;
+  background: var(--accent);
+  color: #ffffff;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
+.skip-link:focus-visible {
+  top: 12px;
 }
 
 a {
@@ -483,6 +530,45 @@ main.content {
   color: var(--accent-text);
 }
 
+/* EN/SW switch (components/LanguageToggle.tsx) — a plain segmented control,
+   deliberately not styled like theme-toggle's pill/thumb (that affordance
+   reads as "on/off", not "pick one of two named options"). */
+.language-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.language-toggle-option {
+  appearance: none;
+  border: none;
+  background: var(--panel-muted);
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 5px 9px;
+  cursor: pointer;
+  transition: background-color 0.15s var(--ease), color 0.15s var(--ease);
+}
+
+.language-toggle-option + .language-toggle-option {
+  border-left: 1px solid var(--border-strong);
+}
+
+.language-toggle-option:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.language-toggle-option.active {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
 /* ==========================================================================
    Cards & notes
    ========================================================================== */
@@ -509,6 +595,15 @@ main.content {
   padding-left: 10px;
 }
 
+/* Shown briefly while a lazy-loaded route's chunk downloads (see App.tsx's
+   React.lazy per-page code splitting) — border-less, since this isn't a
+   note about the data, just a loading state. */
+.route-loading {
+  border-left: none;
+  padding: 40px 0;
+  text-align: center;
+}
+
 .banner-warning {
   background: var(--risk-mid-soft);
   border: 1px solid var(--risk-mid);
@@ -517,6 +612,24 @@ main.content {
   padding: 10px 14px;
   font-size: 0.8125rem;
   margin-bottom: 16px;
+}
+
+/* Shown app-wide (App.tsx, above the topbar) whenever navigator.onLine is
+   false — see components/OfflineBanner.tsx. Sticky so it stays visible
+   while scrolling a long page, since it's telling you the data on screen
+   may be stale, not just a one-time notice. */
+.offline-banner {
+  position: sticky;
+  top: 0;
+  z-index: 31;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  background: var(--risk-mid-soft);
+  border-bottom: 1px solid var(--risk-mid);
+  color: var(--text);
+  font-size: 0.8125rem;
 }
 
 /* ==========================================================================
@@ -675,6 +788,16 @@ tbody tr:hover {
 
 tbody tr:last-child td {
   border-bottom: none;
+}
+
+/* A superseded record — still real history, but no longer the "current"
+   version of that report; dimmed rather than hidden so the correction trail
+   stays visible. */
+/* Color alone (not opacity too — that was compounding with --muted's own
+   dimming and dropping text contrast below WCAG AA, caught by an axe-core
+   scan) carries the "de-emphasized" signal here. */
+tbody tr.row-muted {
+  color: var(--muted);
 }
 
 /* ==========================================================================
@@ -1055,6 +1178,26 @@ tbody tr:last-child td {
   min-width: 150px;
 }
 
+/* Settings page (lib/settings.ts / pages/Settings.tsx) — one field per row
+   with its explanatory hint directly beneath, rather than field-row's
+   side-by-side layout, since each of these needs room to explain itself. */
+.settings-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 480px;
+}
+
+.settings-fields .field-hint {
+  margin-top: 2px;
+}
+
+.settings-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
 .form-banner-success {
   background: var(--risk-low-soft);
   border: 1px solid var(--risk-low);
@@ -1294,4 +1437,533 @@ tbody tr:last-child td {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* ==========================================================================
+   Error boundary
+   ========================================================================== */
+
+.error-boundary {
+  padding: 8px 0;
+}
+
+.error-boundary-card {
+  border-color: var(--risk-high);
+}
+
+.error-boundary-detail {
+  background: var(--panel-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  overflow-x: auto;
+  margin: 0 0 14px;
+}
+
+/* ==========================================================================
+   Chain integrity status
+   ========================================================================== */
+
+.chain-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.chain-status-valid {
+  background: var(--risk-low-soft);
+  border-color: var(--risk-low);
+  color: var(--risk-low);
+}
+
+.chain-status-broken {
+  background: var(--risk-high-soft);
+  border-color: var(--risk-high);
+  color: var(--risk-high);
+}
+
+.chain-status-headline {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.chain-status-detail {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* --- Interactive chain visualization (real chain + the tamper sandbox) --- */
+
+.chain-scroll {
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  padding: 4px 4px 16px;
+}
+
+.chain-link-wrap {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.chain-connector {
+  width: 20px;
+  height: 2px;
+  background: var(--border-strong);
+  flex-shrink: 0;
+  margin: 0 2px;
+}
+
+.chain-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border-strong);
+  background: var(--panel-muted);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: border-color 0.15s var(--ease), background-color 0.15s var(--ease), transform 0.1s var(--ease),
+    box-shadow 0.15s var(--ease);
+}
+
+.chain-link:hover {
+  transform: translateY(-1px);
+}
+
+.chain-link-valid {
+  border-color: var(--risk-low);
+  color: var(--risk-low);
+}
+.chain-link-valid:hover {
+  background: var(--risk-low-soft);
+}
+
+.chain-link-broken {
+  border-color: var(--risk-high);
+  color: var(--risk-high);
+  background: var(--risk-high-soft);
+}
+
+.chain-link-selected {
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.chain-link-date {
+  font-weight: 600;
+}
+
+.chain-link-hash {
+  color: var(--muted);
+}
+
+.chain-detail {
+  margin-top: 8px;
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  background: var(--panel-muted);
+}
+
+.chain-detail-valid {
+  border-left-color: var(--risk-low);
+}
+.chain-detail-broken {
+  border-left-color: var(--risk-high);
+}
+
+.chain-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.chain-detail-header h3 {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.chain-detail-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 14px;
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.chain-detail-grid dt {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.chain-detail-grid dd {
+  margin: 0;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.chain-detail-hash {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+/* the sandbox demo's links are mini-forms, not buttons — same base look,
+   different internal layout */
+.chain-link-demo {
+  cursor: default;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  min-width: 150px;
+}
+
+.chain-link-demo:hover {
+  transform: none;
+}
+
+.chain-link-index {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 0.8125rem;
+}
+
+.chain-link-demo-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.6875rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+  width: 100%;
+}
+
+.chain-link-demo-field input {
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-transform: none;
+  letter-spacing: normal;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  color: var(--text);
+  width: 100%;
+}
+
+.chain-link-demo-field input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.chain-link-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   Card header row (title/status on the left, an action button on the right)
+   ========================================================================== */
+
+.card-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.card-header-row:empty {
+  display: none;
+}
+
+/* ==========================================================================
+   Decision Support
+   ========================================================================== */
+
+.rec-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.rec-summary-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  background: var(--panel);
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  transition: transform 0.15s var(--ease), box-shadow 0.15s var(--ease);
+}
+
+.rec-summary-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+}
+
+.rec-summary-count {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.rec-summary-chip-high {
+  border-left-color: var(--risk-high);
+}
+.rec-summary-chip-high .rec-summary-count {
+  color: var(--risk-high);
+}
+
+.rec-summary-chip-mid {
+  border-left-color: var(--risk-mid);
+}
+.rec-summary-chip-mid .rec-summary-count {
+  color: var(--risk-mid);
+}
+
+.rec-summary-chip-low {
+  border-left-color: var(--risk-low);
+}
+.rec-summary-chip-low .rec-summary-count {
+  color: var(--risk-low);
+}
+
+.rec-summary-chip-no-data {
+  border-left-color: var(--muted);
+}
+.rec-summary-chip-no-data .rec-summary-count {
+  color: var(--muted);
+}
+
+.rec-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.rec-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.rec-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.15s var(--ease);
+}
+
+.rec-card:hover {
+  box-shadow: var(--shadow);
+}
+
+.rec-card-high {
+  border-top-color: var(--risk-high);
+}
+.rec-card-mid {
+  border-top-color: var(--risk-mid);
+}
+.rec-card-low {
+  border-top-color: var(--risk-low);
+}
+.rec-card-no-data {
+  border-top-color: var(--muted);
+}
+
+.rec-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.rec-card-header h3 {
+  margin: 0;
+  font-size: 1.0625rem;
+}
+
+.rec-card-header h3 a {
+  text-decoration: none;
+}
+
+.rec-card-header h3 a:hover {
+  text-decoration: underline;
+}
+
+.priority-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 0.71875rem;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.priority-badge-high {
+  background: var(--risk-high-soft);
+  color: var(--risk-high);
+}
+.priority-badge-mid {
+  background: var(--risk-mid-soft);
+  color: var(--risk-mid);
+}
+.priority-badge-low {
+  background: var(--risk-low-soft);
+  color: var(--risk-low);
+}
+.priority-badge-no-data {
+  background: var(--panel-muted);
+  color: var(--muted);
+}
+
+.rec-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: var(--panel-muted);
+  border-radius: var(--radius-sm);
+}
+
+.rec-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rec-stat-label {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.rec-stat-value {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.trend-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  padding: 4px 0;
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+}
+
+.trend-badge-caution {
+  color: var(--risk-mid);
+}
+.trend-badge-good {
+  color: var(--risk-low);
+}
+.trend-badge-neutral {
+  color: var(--muted);
+}
+
+.rec-actions-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 0 0 6px;
+}
+
+.rec-actions {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rec-actions li {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  padding-left: 16px;
+  position: relative;
+  color: var(--text-secondary);
+}
+
+.rec-actions li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.rec-why {
+  font-size: 0.8125rem;
+}
+
+.rec-why summary {
+  cursor: pointer;
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.rec-why ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }

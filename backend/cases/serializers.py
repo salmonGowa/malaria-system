@@ -42,6 +42,13 @@ class HealthFacilitySerializer(serializers.ModelSerializer):
 class CaseReportSerializer(serializers.ModelSerializer):
     facility_name = serializers.CharField(source="facility.name", read_only=True)
     county_name = serializers.CharField(source="county.name", read_only=True)
+    reported_by_username = serializers.CharField(source="reported_by.username", read_only=True)
+    # Reverse of `supersedes`: at most one report should ever correct a given
+    # report (CaseReportService.create_report enforces that), so surface it
+    # as a single nullable id rather than a list — lets the UI grey out
+    # "Correct" on a report that's already been corrected without a second
+    # request per row.
+    superseded_by_id = serializers.SerializerMethodField()
 
     class Meta:
         model = CaseReport
@@ -56,7 +63,9 @@ class CaseReportSerializer(serializers.ModelSerializer):
             "suspected_cases",
             "deaths",
             "reported_by",
+            "reported_by_username",
             "supersedes",
+            "superseded_by_id",
             "created_at",
             "previous_hash",
             "record_hash",
@@ -65,6 +74,10 @@ class CaseReportSerializer(serializers.ModelSerializer):
         # Note: this serializer is validation/representation only. Creation
         # (stamping `reported_by`, calling CaseReport.objects.create) happens in
         # CaseReportController -> CaseReportService, not here.
+
+    def get_superseded_by_id(self, obj):
+        current = obj.superseded_by.order_by("-id").first()
+        return current.id if current else None
 
 
 class ClimateObservationSerializer(serializers.ModelSerializer):
@@ -83,6 +96,7 @@ class HistoricalCaseDataSerializer(serializers.ModelSerializer):
 
 class ForecastRunSerializer(serializers.ModelSerializer):
     county_name = serializers.CharField(source="county.name", read_only=True)
+    generated_by_username = serializers.CharField(source="generated_by.username", read_only=True, default=None)
 
     class Meta:
         model = ForecastRun
@@ -97,11 +111,13 @@ class ForecastRunSerializer(serializers.ModelSerializer):
             "model_name",
             "model_version",
             "generated_at",
+            "generated_by_username",
         ]
 
 
 class VaccineAllocationSerializer(serializers.ModelSerializer):
     county_name = serializers.CharField(source="county.name", read_only=True)
+    generated_by_username = serializers.CharField(source="generated_by.username", read_only=True, default=None)
 
     class Meta:
         model = VaccineAllocation
@@ -115,4 +131,5 @@ class VaccineAllocationSerializer(serializers.ModelSerializer):
             "based_on_forecast",
             "rationale",
             "generated_at",
+            "generated_by_username",
         ]

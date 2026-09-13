@@ -1,6 +1,6 @@
 import json
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.allocation import optimise_allocation
@@ -12,8 +12,12 @@ from app.schemas import (
     ForecastResponse,
     SimulationRequest,
     SimulationResponse,
+    UploadSimulationResponse,
 )
 from app.simulation import simulate_outbreak
+from app.upload_simulation import UploadValidationError, parse_csv, simulate_upload
+
+MAX_UPLOAD_BYTES = 2 * 1024 * 1024  # 2MB — generous for a monthly case-count CSV, cheap to abuse otherwise
 
 app = FastAPI(
     title="Malaria Forecasting & Allocation Service",
@@ -77,3 +81,26 @@ def simulate(request: SimulationRequest):
     """ILLUSTRATIVE — a generic SEIR compartmental model, not the trained,
     data-fitted forecasting model from Module 2. See app/simulation.py."""
     return simulate_outbreak(request)
+
+
+@app.post("/simulate-upload", response_model=UploadSimulationResponse)
+async def simulate_upload_endpoint(
+    file: UploadFile = File(..., description="CSV with columns: date, confirmed_cases, rainfall_mm (optional)"),
+    population: int = Form(..., gt=0),
+    horizon_months: int = Form(6, ge=1, le=24),
+):
+    """Fit the SEIR compartmental model to an arbitrary uploaded case series
+    and project it forward — see app/upload_simulation.py for why this uses
+    SEIR rather than the trained XGBoost model (that one is only meaningful
+    for the 5 counties it was actually trained on)."""
+    raw = await file.read()
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"File too large — max {MAX_UPLOAD_BYTES // 1024}KB.")
+
+    try:
+        rows = parse_csv(raw)
+        return simulate_upload(rows, population, horizon_months)
+    except UploadValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ValueError as exc:  # compartmental.fit_county's own guards (e.g. too-short series)
+        raise HTTPException(status_code=422, detail=str(exc)) from exc

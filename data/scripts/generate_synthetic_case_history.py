@@ -63,7 +63,16 @@ ANNUAL_CASES_PER_1000 = {
     "Siaya": 260.0,
     "Homa Bay": 240.0,
     "Busia": 220.0,
+    "Migori": 230.0,  # lake-endemic, comparable to Homa Bay/Busia
+    "Kakamega": 210.0,  # lake-endemic zone extends into western highlands fringe
+    "Vihiga": 190.0,
+    "Bungoma": 180.0,  # fringe of the lake-endemic zone, moving toward highland
+    "Kisii": 60.0,  # highland-epidemic zone: higher altitude, lower/episodic transmission
+    "Nyamira": 55.0,  # highland-epidemic, similar profile to Kisii
     "Kilifi": 90.0,  # coastal Kenya has seen steeper transmission decline than the lake region
+    "Kwale": 130.0,  # coast-endemic
+    "Mombasa": 40.0,  # predominantly urban — much lower breeding habitat/transmission
+    "Taita Taveta": 70.0,  # semi-arid coast hinterland, more seasonal
 }
 
 

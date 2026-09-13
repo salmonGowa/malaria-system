@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 
 import type { County } from "../api/client";
 import { riskBand } from "../lib/format";
+import { useThresholds } from "../lib/useThresholds";
 
 const RISK_COLORS: Record<"high" | "mid" | "low", string> = {
   high: "#d9534f",
@@ -18,6 +19,7 @@ interface RiskMapProps {
 }
 
 export default function RiskMap({ counties, riskByCountyId }: RiskMapProps) {
+  const thresholds = useThresholds();
   const withBoundary = counties.filter((c) => c.boundary);
 
   if (withBoundary.length === 0) {
@@ -41,7 +43,7 @@ export default function RiskMap({ counties, riskByCountyId }: RiskMapProps) {
       />
       {withBoundary.map((county) => {
         const risk = riskByCountyId[county.id];
-        const color = risk === undefined ? NO_DATA_COLOR : RISK_COLORS[riskBand(risk)];
+        const color = risk === undefined ? NO_DATA_COLOR : RISK_COLORS[riskBand(risk, thresholds)];
         return (
           <GeoJSON
             key={`${county.id}-${risk ?? "none"}`}

@@ -26,4 +26,7 @@ class ForecastRunController(ReadOnlyController):
         as_of_date = date.fromisoformat(as_of_raw) if as_of_raw else date.today()
         horizon_weeks = int(request.data.get("horizon_weeks", 4))
 
-        return ForecastGenerationService().generate_for_counties(counties, as_of_date, horizon_weeks)
+        generated_by = request.user if request.user.is_authenticated else None
+        return ForecastGenerationService().generate_for_counties(
+            counties, as_of_date, horizon_weeks, generated_by=generated_by
+        )

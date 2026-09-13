@@ -44,6 +44,19 @@ class AllocationRequest(BaseModel):
     county_populations: dict[str, int] = Field(
         ..., description="county_code -> at-risk population, used alongside risk_score"
     )
+    max_share_per_county: float = Field(
+        1.0,
+        gt=0,
+        le=1,
+        description=(
+            "Cap any single county at this fraction of total_available_doses. Default 1.0 (no "
+            "cap) preserves the original behaviour: with a purely linear objective, the solver "
+            "pours doses into the single highest-risk county up to its population cap before "
+            "allocating anything else (see docs/architecture.md's 'Known limitation'). Setting "
+            "this below 1.0 is the documented fix — a policy constraint that forces spread "
+            "across multiple high-risk counties instead of concentrating in one."
+        ),
+    )
 
 
 class AllocationLine(BaseModel):
@@ -92,3 +105,21 @@ class SimulationResponse(BaseModel):
         "trained, data-fitted forecasting model (Module 2). For exploring "
         "intervention trade-offs only, not for operational decisions."
     )
+
+
+class UploadSimulationRow(BaseModel):
+    date: str
+    actual: float | None = None
+    fitted: float | None = None
+    predicted: float | None = None
+
+
+class UploadSimulationResponse(BaseModel):
+    population: int
+    rows_used: int
+    used_rainfall: bool
+    fitted_params: dict[str, float]
+    fit_relative_error: float = Field(..., description="RMSE(fitted, actual) / mean(actual) over the uploaded window")
+    series: list[UploadSimulationRow]
+    warnings: list[str]
+    disclaimer: str

@@ -5,12 +5,14 @@ import { api, County, ForecastRun, GenerateForecastsError } from "../api/client"
 import CountyPicker from "../components/CountyPicker";
 import { UserIcon } from "../components/icons";
 import { useAuth } from "../lib/auth";
+import { useLanguage } from "../lib/i18n";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
 export default function GenerateForecast() {
+  const { t } = useLanguage();
   const { username } = useAuth();
   const [counties, setCounties] = useState<County[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -55,7 +57,7 @@ export default function GenerateForecast() {
 
   return (
     <div>
-      <h2>Generate Forecast</h2>
+      <h2>{t("page.generateForecast")}</h2>
       <p className="placeholder-note">
         Calls the trained model (ml_service/app/forecasting.py) for each selected county using its real recent
         rainfall + case history, and stores the result. See results on <Link to="/forecasts">Forecasts</Link>.
@@ -92,7 +94,7 @@ export default function GenerateForecast() {
           {error && <p className="form-banner-error">{error}</p>}
 
           <button type="submit" className="btn btn-primary" disabled={!username || submitting}>
-            {submitting ? "Generating…" : "Generate forecasts"}
+            {submitting ? t("common.generating") : t("common.generateForecasts")}
           </button>
         </form>
 

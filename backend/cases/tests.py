@@ -15,8 +15,17 @@ from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 from shapely.geometry import Polygon
 from data.scripts.aggregate_climate import _write_observation, aggregate_raster_to_polygon
-from .models import CaseReport, ClimateObservation, County, ForecastRun, HealthFacility, HistoricalCaseData
+from .models import (
+    CaseReport,
+    ClimateObservation,
+    County,
+    ForecastRun,
+    HealthFacility,
+    HistoricalCaseData,
+    VaccineAllocation,
+)
 from .services.allocation_generation_service import AllocationGenerationError, AllocationGenerationService
+from .services.case_report_service import CaseReportService
 from .services.forecast_generation_service import ForecastGenerationError, ForecastGenerationService
 
 
@@ -177,6 +186,174 @@ class CaseReportChainTests(TestCase):
         with self.assertRaises(ValueError):
             report.delete()
 
+    def test_verify_chain_valid_on_untouched_records(self):
+        self._make_report(confirmed_cases=10)
+        self._make_report(confirmed_cases=15)
+        self._make_report(confirmed_cases=20)
+
+        result = CaseReportService().verify_chain()
+        self.assertTrue(result["valid"])
+        self.assertEqual(result["total_records"], 3)
+        self.assertIsNone(result["broken_at_id"])
+
+    def test_verify_chain_detects_an_edited_record(self):
+        first = self._make_report(confirmed_cases=10)
+        self._make_report(confirmed_cases=15)
+
+        # save() refuses this (immutability) — simulate real tampering (e.g.
+        # a raw SQL UPDATE) by bypassing the model layer entirely.
+        CaseReport.objects.filter(pk=first.pk).update(confirmed_cases=99999)
+
+        result = CaseReportService().verify_chain()
+        self.assertFalse(result["valid"])
+        self.assertEqual(result["broken_at_id"], first.pk)
+        self.assertIn("edited", result["reason"])
+
+    def test_verify_chain_returns_a_per_record_breakdown_continuing_past_the_first_failure(self):
+        """Editing a record's content (not its stored hash column) doesn't
+        change what the *next* record's previous_hash was set against, so
+        the chain should keep walking and report every record, not bail out
+        after the first bad one — the whole point of per-record detail."""
+        first = self._make_report(confirmed_cases=10)
+        second = self._make_report(confirmed_cases=15)
+        third = self._make_report(confirmed_cases=20)
+        CaseReport.objects.filter(pk=first.pk).update(confirmed_cases=99999)
+
+        result = CaseReportService().verify_chain()
+
+        self.assertEqual(len(result["records"]), 3)
+        by_id = {r["id"]: r for r in result["records"]}
+
+        self.assertFalse(by_id[first.pk]["self_valid"])
+        self.assertFalse(by_id[first.pk]["valid"])
+        # second and third's previous_hash still matches first's unchanged
+        # stored record_hash column — their own link/self checks still pass.
+        self.assertTrue(by_id[second.pk]["valid"])
+        self.assertTrue(by_id[third.pk]["valid"])
+
+    def test_verify_chain_records_are_all_valid_when_untampered(self):
+        a = self._make_report(confirmed_cases=10)
+        b = self._make_report(confirmed_cases=15)
+
+        result = CaseReportService().verify_chain()
+
+        self.assertEqual({r["id"] for r in result["records"]}, {a.pk, b.pk})
+        self.assertTrue(all(r["valid"] for r in result["records"]))
+
+    def test_verify_chain_endpoint(self):
+        self._make_report(confirmed_cases=10)
+        resp = self.client.get("/api/case-reports/verify_chain/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data["valid"])
+
+
+class CaseReportCorrectionTests(TestCase):
+    """CaseReport is append-only, so a mistaken report is corrected by
+    submitting a new report with `supersedes` set, never by editing the old
+    one — see CaseReportService.create_report."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(username="reporter", password="testpass123")
+        self.token = Token.objects.create(user=self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token.key}")
+        self.county = County.objects.create(name="Kisumu", code="KEN-042")
+        self.other_county = County.objects.create(name="Siaya", code="KEN-041")
+        self.facility = HealthFacility.objects.create(
+            name="Kisumu Dispensary", county=self.county, level=HealthFacility.FacilityLevel.DISPENSARY
+        )
+        self.other_facility = HealthFacility.objects.create(
+            name="Siaya Dispensary", county=self.other_county, level=HealthFacility.FacilityLevel.DISPENSARY
+        )
+        self.original = CaseReport.objects.create(
+            county=self.county,
+            facility=self.facility,
+            report_date="2026-01-15",
+            confirmed_cases=10,
+            suspected_cases=2,
+            deaths=0,
+            reported_by=self.user,
+        )
+
+    def _payload(self, **overrides):
+        payload = {
+            "county": self.county.id,
+            "facility": self.facility.id,
+            "report_date": "2026-01-15",
+            "confirmed_cases": 25,
+            "suspected_cases": 2,
+            "deaths": 0,
+            "supersedes": self.original.id,
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_correction_is_created_and_linked(self):
+        resp = self.client.post("/api/case-reports/", self._payload(), format="json")
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertEqual(resp.data["confirmed_cases"], 25)
+        self.assertEqual(resp.data["supersedes"], self.original.id)
+
+        # The original report is untouched — no in-place edit ever happens.
+        self.original.refresh_from_db()
+        self.assertEqual(self.original.confirmed_cases, 10)
+
+    def test_original_report_reflects_superseded_by_id_after_correction(self):
+        resp = self.client.post("/api/case-reports/", self._payload(), format="json")
+        correction_id = resp.data["id"]
+
+        detail = self.client.get(f"/api/case-reports/{self.original.id}/")
+        self.assertEqual(detail.data["superseded_by_id"], correction_id)
+
+    def test_cannot_supersede_a_report_that_is_already_superseded(self):
+        first_correction = self.client.post("/api/case-reports/", self._payload(confirmed_cases=25), format="json")
+        self.assertEqual(first_correction.status_code, 201)
+
+        second_correction = self.client.post(
+            "/api/case-reports/", self._payload(confirmed_cases=30), format="json"
+        )
+        self.assertEqual(second_correction.status_code, 400)
+        self.assertIn("already been corrected", str(second_correction.data))
+
+        # Correcting the *current* version (the first correction) instead
+        # works fine.
+        resp = self.client.post(
+            "/api/case-reports/",
+            self._payload(confirmed_cases=30, supersedes=first_correction.data["id"]),
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+
+    def test_correction_must_match_county_facility_and_report_date(self):
+        resp = self.client.post("/api/case-reports/", self._payload(county=self.other_county.id), format="json")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("county", str(resp.data))
+
+        resp = self.client.post("/api/case-reports/", self._payload(facility=self.other_facility.id), format="json")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("facility", str(resp.data))
+
+        resp = self.client.post("/api/case-reports/", self._payload(report_date="2026-02-15"), format="json")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("report_date", str(resp.data))
+
+    def test_report_without_supersedes_is_unaffected(self):
+        """A plain new report (no correction) needs none of the supersedes checks."""
+        resp = self.client.post(
+            "/api/case-reports/",
+            {
+                "county": self.county.id,
+                "facility": self.facility.id,
+                "report_date": "2026-02-01",
+                "confirmed_cases": 5,
+                "suspected_cases": 0,
+                "deaths": 0,
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertIsNone(resp.data["supersedes"])
+
 
 def _mock_response(status_code, json_data):
     resp = Mock()
@@ -307,6 +484,75 @@ class AllocationGenerationServiceTests(TestCase):
             AllocationGenerationService().generate([county_c], 10000, date(2026, 5, 1), date(2026, 5, 28))
 
 
+class GenerationAuditTrailTests(TestCase):
+    """ForecastRun/VaccineAllocation.generated_by — who triggered a /generate
+    call, for the same accountability reason CaseReport tracks `reported_by`."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(username="analyst", password="testpass123")
+        self.token = Token.objects.create(user=self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token.key}")
+        self.county = County.objects.create(name="Kisumu", code="KEN-042", population=500_000)
+        for i in range(4):
+            month = date(2026, 1, 1).replace(month=i + 1)
+            HistoricalCaseData.objects.create(county=self.county, period_start=month, confirmed_cases=100, source="synthetic_v1")
+            ClimateObservation.objects.create(county=self.county, observation_date=month, rainfall_mm=30, source="CHIRPS")
+
+    @patch("cases.services.forecast_generation_service.requests.post")
+    def test_generate_forecast_endpoint_stamps_the_requesting_user(self, mock_post):
+        mock_post.return_value = _mock_response(
+            200,
+            {
+                "forecast_period_start": "2026-05-01",
+                "forecast_period_end": "2026-05-28",
+                "predicted_cases": 150.0,
+                "risk_score": 0.62,
+                "model_name": "xgboost_v1",
+                "model_version": "test",
+            },
+        )
+        resp = self.client.post(
+            "/api/forecasts/generate/", {"county_ids": [self.county.id]}, format="json"
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        run = ForecastRun.objects.get()
+        self.assertEqual(run.generated_by, self.user)
+
+        list_resp = self.client.get("/api/forecasts/")
+        self.assertEqual(list_resp.data["results"][0]["generated_by_username"], "analyst")
+
+    @patch("cases.services.allocation_generation_service.requests.post")
+    def test_generate_allocation_endpoint_stamps_the_requesting_user(self, mock_post):
+        ForecastRun.objects.create(
+            county=self.county,
+            forecast_period_start=date(2026, 5, 1),
+            forecast_period_end=date(2026, 5, 28),
+            predicted_cases=120.0,
+            risk_score=0.7,
+            model_name="xgboost_v1",
+        )
+        mock_post.return_value = _mock_response(
+            200,
+            {
+                "total_available_doses": 1000,
+                "total_allocated_doses": 1000,
+                "allocations": [{"county_code": "KEN-042", "recommended_doses": 1000, "rationale": "only county"}],
+            },
+        )
+        resp = self.client.post(
+            "/api/allocations/generate/",
+            {"total_available_doses": 1000, "county_ids": [self.county.id]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        allocation = VaccineAllocation.objects.get()
+        self.assertEqual(allocation.generated_by, self.user)
+
+        list_resp = self.client.get("/api/allocations/")
+        self.assertEqual(list_resp.data["results"][0]["generated_by_username"], "analyst")
+
+
 class AuthTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -406,4 +652,61 @@ class GenerateEndpointCountySelectionTests(TestCase):
         )
         resp = self.client.post("/api/forecasts/generate/", {"as_of_date": "2026-05-01"}, format="json")
         self.assertEqual(len(resp.data["created"]), 1)
+
+
+class CountyAndFacilityWriteTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        user = get_user_model().objects.create_user(username="tester", password="pw")
+        token = Token.objects.create(user=user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+
+    def test_anonymous_cannot_create_county(self):
+        anon = APIClient()
+        resp = anon.post("/api/counties/", {"name": "Nakuru", "code": "KEN-032"}, format="json")
+        self.assertEqual(resp.status_code, 401)
+
+    def test_create_county(self):
+        resp = self.client.post(
+            "/api/counties/", {"name": "Nakuru", "code": "KEN-032", "population": 2_162_202}, format="json"
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(County.objects.get(code="KEN-032").name, "Nakuru")
+
+    def test_create_county_does_not_accept_a_boundary(self):
+        """boundary is a read-only SerializerMethodField — posting one should
+        be silently ignored, not crash, and the county should be created
+        with no boundary."""
+        resp = self.client.post(
+            "/api/counties/",
+            {"name": "Nakuru", "code": "KEN-032", "boundary": {"type": "MultiPolygon", "coordinates": []}},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertIsNone(County.objects.get(code="KEN-032").boundary)
+
+    def test_update_county_population(self):
+        county = County.objects.create(name="Nakuru", code="KEN-032", population=1)
+        resp = self.client.patch(f"/api/counties/{county.id}/", {"population": 2_162_202}, format="json")
+        self.assertEqual(resp.status_code, 200)
+        county.refresh_from_db()
+        self.assertEqual(county.population, 2_162_202)
+
+    def test_create_facility(self):
+        county = County.objects.create(name="Nakuru", code="KEN-032")
+        resp = self.client.post(
+            "/api/facilities/",
+            {"name": "Nakuru Level 5 Hospital", "county": county.id, "level": "hospital"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(HealthFacility.objects.get(name="Nakuru Level 5 Hospital").county, county)
+
+    def test_anonymous_cannot_create_facility(self):
+        county = County.objects.create(name="Nakuru", code="KEN-032")
+        anon = APIClient()
+        resp = anon.post(
+            "/api/facilities/", {"name": "Nakuru Level 5 Hospital", "county": county.id, "level": "hospital"}, format="json"
+        )
+        self.assertEqual(resp.status_code, 401)
     

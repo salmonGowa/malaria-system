@@ -9,12 +9,26 @@ Approach: maximise total expected cases averted, approximated as
 sum(risk_score_i * doses_i), subject to:
   - total doses allocated <= total available doses
   - doses to county i <= that county's at-risk population (can't over-allocate)
+  - doses to county i <= max_share_per_county * total_available_doses (optional
+    policy ceiling — see below)
 
 This directly follows the sub-national, risk-weighted prioritisation strategy
 shown to outperform uniform national rollout in Hogan, Winskill & Ghani (2020),
 which the proposal cites as its motivating study. It's a linear relaxation of
 what is technically an integer allocation problem; doses are rounded down after
 solving, which is fine at the scale (thousands of doses) this operates at.
+
+On the corner-solution behaviour (docs/architecture.md's "Known limitation"):
+a purely linear objective has no diminishing returns, so left unconstrained the
+solver pours every dose into the single highest-risk county up to its
+population cap before allocating anything else. That's still the default here
+(max_share_per_county=1.0) because it's a legitimate baseline, not a bug — but
+`max_share_per_county` below 1.0 is the documented, simplest fix: a per-county
+ceiling as a policy constraint, which is exactly what the architecture doc
+proposed as the alternative to a nonlinear (sqrt) objective PuLP can't express
+directly. Left as a caller-chosen parameter rather than a new hardcoded default
+because whether concentration or spread is the right call is a policy decision,
+not one this module should make unilaterally.
 """
 
 import pulp
@@ -26,6 +40,7 @@ def optimise_allocation(request: AllocationRequest) -> AllocationResponse:
     counties = [f.county_code for f in request.county_forecasts]
     risk_by_county = {f.county_code: f.risk_score for f in request.county_forecasts}
     population_by_county = request.county_populations
+    share_cap = request.max_share_per_county * request.total_available_doses
 
     problem = pulp.LpProblem("vaccine_allocation", pulp.LpMaximize)
 
@@ -39,11 +54,16 @@ def optimise_allocation(request: AllocationRequest) -> AllocationResponse:
     # Total doses constraint.
     problem += pulp.lpSum(doses[code] for code in counties) <= request.total_available_doses
 
-    # Can't allocate more doses than the at-risk population in a county.
     for code in counties:
+        # Can't allocate more doses than the at-risk population in a county.
         cap = population_by_county.get(code)
         if cap is not None:
             problem += doses[code] <= cap
+        # Optional policy ceiling — see module docstring. A no-op at the
+        # default max_share_per_county=1.0 (share_cap == total_available_doses,
+        # never tighter than the total-doses constraint above).
+        if request.max_share_per_county < 1.0:
+            problem += doses[code] <= share_cap
 
     problem.solve(pulp.PULP_CBC_CMD(msg=False))
 
@@ -52,17 +72,14 @@ def optimise_allocation(request: AllocationRequest) -> AllocationResponse:
     for code in counties:
         recommended = int(doses[code].value() or 0)
         total_allocated += recommended
-        allocations.append(
-            AllocationLine(
-                county_code=code,
-                recommended_doses=recommended,
-                rationale=(
-                    f"Risk score {risk_by_county[code]:.2f}; allocation maximises "
-                    f"risk-weighted coverage under the {request.total_available_doses}-dose constraint, "
-                    f"capped at the county's at-risk population."
-                ),
-            )
+        rationale = (
+            f"Risk score {risk_by_county[code]:.2f}; allocation maximises "
+            f"risk-weighted coverage under the {request.total_available_doses}-dose constraint, "
+            f"capped at the county's at-risk population"
         )
+        if request.max_share_per_county < 1.0:
+            rationale += f" and at {request.max_share_per_county:.0%} of total doses ({int(share_cap)})"
+        allocations.append(AllocationLine(county_code=code, recommended_doses=recommended, rationale=rationale + "."))
 
     return AllocationResponse(
         total_available_doses=request.total_available_doses,

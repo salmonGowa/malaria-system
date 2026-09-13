@@ -10,8 +10,29 @@ export function setAuthToken(token: string | null) {
   authToken = token;
 }
 
+/** DRF validation errors come back as `{"field": ["message"]}` (or
+ * `{"detail": "message"}` for framework-level errors) — pull out the first
+ * human-readable message instead of showing the raw JSON blob to the user. */
+function extractErrorMessage(body: string): string {
+  try {
+    const parsed = JSON.parse(body);
+    if (typeof parsed.detail === "string") return parsed.detail;
+    for (const value of Object.values(parsed)) {
+      if (typeof value === "string") return value;
+      if (Array.isArray(value) && typeof value[0] === "string") return value[0];
+    }
+  } catch {
+    // Not JSON — fall through to returning the raw body below.
+  }
+  return body;
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = {};
+  // A FormData body (file uploads) needs the browser to set its own
+  // Content-Type with the multipart boundary — setting it ourselves (even to
+  // the "right" value) breaks the boundary and the server can't parse it.
+  if (!(options?.body instanceof FormData)) headers["Content-Type"] = "application/json";
   if (authToken) headers.Authorization = `Token ${authToken}`;
 
   const res = await fetch(url, {
@@ -20,7 +41,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`Request to ${url} failed: ${res.status} ${res.statusText}${body ? ` — ${body}` : ""}`);
+    throw new Error(`Request to ${url} failed: ${res.status} ${res.statusText}${body ? ` — ${extractErrorMessage(body)}` : ""}`);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
@@ -89,7 +110,12 @@ export interface CaseReport {
   confirmed_cases: number;
   suspected_cases: number;
   deaths: number;
+  reported_by: number | null;
+  reported_by_username: string | null;
+  supersedes: number | null;
+  superseded_by_id: number | null;
   created_at: string;
+  previous_hash: string;
   record_hash: string;
 }
 
@@ -104,6 +130,7 @@ export interface ForecastRun {
   model_name: string;
   model_version: string;
   generated_at: string;
+  generated_by_username: string | null;
 }
 
 export interface HistoricalCaseData {
@@ -125,6 +152,7 @@ export interface VaccineAllocation {
   based_on_forecast: number | null;
   rationale: string;
   generated_at: string;
+  generated_by_username: string | null;
 }
 
 export interface LoginResponse {
@@ -143,6 +171,7 @@ export interface NewCaseReport {
   confirmed_cases: number;
   suspected_cases: number;
   deaths: number;
+  supersedes?: number;
 }
 
 export interface GenerateForecastsRequest {
@@ -167,6 +196,49 @@ export interface GenerateAllocationsRequest {
   county_ids?: number[];
   period_start?: string;
   period_end?: string;
+  max_share_per_county?: number;
+}
+
+export interface NewCounty {
+  name: string;
+  code: string;
+  population?: number | null;
+  is_endemic_focus?: boolean;
+}
+
+export const FACILITY_LEVELS = [
+  { value: "dispensary", label: "Dispensary" },
+  { value: "health_centre", label: "Health Centre" },
+  { value: "community_unit", label: "Community Health Unit" },
+  { value: "hospital", label: "Hospital" },
+] as const;
+
+export interface NewHealthFacility {
+  name: string;
+  county: number;
+  level: string;
+  kmhfl_code?: string;
+}
+
+export interface ChainRecordStatus {
+  id: number;
+  report_date: string;
+  county_name: string;
+  facility_name: string;
+  confirmed_cases: number;
+  record_hash: string;
+  previous_hash: string;
+  self_valid: boolean;
+  link_valid: boolean;
+  valid: boolean;
+}
+
+export interface ChainVerificationResult {
+  valid: boolean;
+  total_records: number;
+  broken_at_id: number | null;
+  reason: string | null;
+  records: ChainRecordStatus[];
 }
 
 // Django backend (source-of-truth data)
@@ -177,27 +249,51 @@ export const api = {
 
   listCounties: () => request<Paginated<County>>(`${API_BASE_URL}/counties/`),
   listAllCounties: () => fetchAll<County>(`${API_BASE_URL}/counties/`),
-  listFacilities: () => request<Paginated<HealthFacility>>(`${API_BASE_URL}/facilities/`),
-  listAllFacilities: () => fetchAll<HealthFacility>(`${API_BASE_URL}/facilities/`),
-  listCaseReports: (page = 1) => request<Paginated<CaseReport>>(`${API_BASE_URL}/case-reports/?page=${page}`),
-  listAllCaseReports: () => fetchAll<CaseReport>(`${API_BASE_URL}/case-reports/`),
+  getCounty: (id: number) => request<County>(`${API_BASE_URL}/counties/${id}/`),
+  createCounty: (body: NewCounty) =>
+    request<County>(`${API_BASE_URL}/counties/`, { method: "POST", body: JSON.stringify(body) }),
+  updateCounty: (id: number, body: Partial<NewCounty>) =>
+    request<County>(`${API_BASE_URL}/counties/${id}/`, { method: "PATCH", body: JSON.stringify(body) }),
+  listFacilities: (page = 1) => request<Paginated<HealthFacility>>(`${API_BASE_URL}/facilities/?page=${page}`),
+  listAllFacilities: (county?: number) =>
+    fetchAll<HealthFacility>(`${API_BASE_URL}/facilities/${county ? `?county=${county}` : ""}`),
+  createFacility: (body: NewHealthFacility) =>
+    request<HealthFacility>(`${API_BASE_URL}/facilities/`, { method: "POST", body: JSON.stringify(body) }),
+  updateFacility: (id: number, body: Partial<NewHealthFacility>) =>
+    request<HealthFacility>(`${API_BASE_URL}/facilities/${id}/`, { method: "PATCH", body: JSON.stringify(body) }),
+  listCaseReports: (page = 1, county?: number) =>
+    request<Paginated<CaseReport>>(`${API_BASE_URL}/case-reports/?page=${page}${county ? `&county=${county}` : ""}`),
+  listAllCaseReports: (county?: number) =>
+    fetchAll<CaseReport>(`${API_BASE_URL}/case-reports/${county ? `?county=${county}` : ""}`),
   createCaseReport: (body: NewCaseReport) =>
     request<CaseReport>(`${API_BASE_URL}/case-reports/`, { method: "POST", body: JSON.stringify(body) }),
+  getCaseReport: (id: number) => request<CaseReport>(`${API_BASE_URL}/case-reports/${id}/`),
+  verifyChain: () => request<ChainVerificationResult>(`${API_BASE_URL}/case-reports/verify_chain/`),
   listHistoricalCaseData: (params: { county?: number; page?: number } = {}) => {
     const q = new URLSearchParams();
     if (params.county) q.set("county", String(params.county));
     q.set("page", String(params.page ?? 1));
     return request<Paginated<HistoricalCaseData>>(`${API_BASE_URL}/historical-case-data/?${q}`);
   },
-  listAllHistoricalCaseData: () => fetchAll<HistoricalCaseData>(`${API_BASE_URL}/historical-case-data/`),
-  listAllClimateObservations: (source?: string) =>
-    fetchAll<ClimateObservation>(`${API_BASE_URL}/climate-observations/${source ? `?source=${source}` : ""}`),
-  listForecasts: (page = 1) => request<Paginated<ForecastRun>>(`${API_BASE_URL}/forecasts/?page=${page}`),
-  listAllForecasts: () => fetchAll<ForecastRun>(`${API_BASE_URL}/forecasts/`),
+  listAllHistoricalCaseData: (county?: number) =>
+    fetchAll<HistoricalCaseData>(`${API_BASE_URL}/historical-case-data/${county ? `?county=${county}` : ""}`),
+  listAllClimateObservations: (source?: string, county?: number) => {
+    const q = new URLSearchParams();
+    if (source) q.set("source", source);
+    if (county) q.set("county", String(county));
+    const qs = q.toString();
+    return fetchAll<ClimateObservation>(`${API_BASE_URL}/climate-observations/${qs ? `?${qs}` : ""}`);
+  },
+  listForecasts: (page = 1, county?: number) =>
+    request<Paginated<ForecastRun>>(`${API_BASE_URL}/forecasts/?page=${page}${county ? `&county=${county}` : ""}`),
+  listAllForecasts: (county?: number) =>
+    fetchAll<ForecastRun>(`${API_BASE_URL}/forecasts/${county ? `?county=${county}` : ""}`),
   generateForecasts: (body: GenerateForecastsRequest) =>
     request<GenerateForecastsResponse>(`${API_BASE_URL}/forecasts/generate/`, { method: "POST", body: JSON.stringify(body) }),
-  listAllocations: (page = 1) => request<Paginated<VaccineAllocation>>(`${API_BASE_URL}/allocations/?page=${page}`),
-  listAllAllocations: () => fetchAll<VaccineAllocation>(`${API_BASE_URL}/allocations/`),
+  listAllocations: (page = 1, county?: number) =>
+    request<Paginated<VaccineAllocation>>(`${API_BASE_URL}/allocations/?page=${page}${county ? `&county=${county}` : ""}`),
+  listAllAllocations: (county?: number) =>
+    fetchAll<VaccineAllocation>(`${API_BASE_URL}/allocations/${county ? `?county=${county}` : ""}`),
   generateAllocations: (body: GenerateAllocationsRequest) =>
     request<VaccineAllocation[]>(`${API_BASE_URL}/allocations/generate/`, { method: "POST", body: JSON.stringify(body) }),
 };
@@ -286,6 +382,24 @@ export interface ModelInfo {
   training_data_disclaimer: string;
 }
 
+export interface UploadSimulationRow {
+  date: string;
+  actual: number | null;
+  fitted: number | null;
+  predicted: number | null;
+}
+
+export interface UploadSimulationResponse {
+  population: number;
+  rows_used: number;
+  used_rainfall: boolean;
+  fitted_params: { beta0: number; k: number; reporting_fraction: number };
+  fit_relative_error: number;
+  series: UploadSimulationRow[];
+  warnings: string[];
+  disclaimer: string;
+}
+
 export const mlApi = {
   health: () => request<{ status: string }>(`${ML_BASE_URL}/health`),
   modelInfo: () => request<ModelInfo>(`${ML_BASE_URL}/model-info`),
@@ -299,4 +413,11 @@ export const mlApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  simulateUpload: (file: File, population: number, horizonMonths: number) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("population", String(population));
+    form.append("horizon_months", String(horizonMonths));
+    return request<UploadSimulationResponse>(`${ML_BASE_URL}/simulate-upload`, { method: "POST", body: form });
+  },
 };

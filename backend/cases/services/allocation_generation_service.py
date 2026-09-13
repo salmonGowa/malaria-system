@@ -25,7 +25,15 @@ class AllocationGenerationService:
                 forecasts[county] = latest
         return forecasts
 
-    def generate(self, counties, total_available_doses, period_start, period_end):
+    def generate(
+        self,
+        counties,
+        total_available_doses,
+        period_start,
+        period_end,
+        max_share_per_county=1.0,
+        generated_by=None,
+    ):
         forecasts = self._latest_forecasts(counties)
         if not forecasts:
             raise AllocationGenerationError(
@@ -34,6 +42,7 @@ class AllocationGenerationService:
 
         payload = {
             "total_available_doses": total_available_doses,
+            "max_share_per_county": max_share_per_county,
             "county_forecasts": [
                 {
                     "county_code": county.code,
@@ -73,6 +82,7 @@ class AllocationGenerationService:
                     recommended_doses=line["recommended_doses"],
                     based_on_forecast=forecasts[county],
                     rationale=line["rationale"],
+                    generated_by=generated_by,
                 )
             )
         return created

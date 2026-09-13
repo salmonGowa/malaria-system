@@ -193,6 +193,14 @@ class ForecastRun(models.Model):
     model_name = models.CharField(max_length=100, help_text="e.g. xgboost_v1, seir_baseline")
     model_version = models.CharField(max_length=50, blank=True)
     generated_at = models.DateTimeField(auto_now_add=True)
+    generated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="forecast_runs",
+        help_text="User who triggered the /generate call that produced this run, if any",
+    )
 
     class Meta:
         ordering = ["-generated_at"]
@@ -214,6 +222,14 @@ class VaccineAllocation(models.Model):
     )
     rationale = models.TextField(blank=True)
     generated_at = models.DateTimeField(auto_now_add=True)
+    generated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="vaccine_allocations",
+        help_text="User who triggered the /generate call that produced this allocation, if any",
+    )
 
     class Meta:
         ordering = ["-generated_at"]

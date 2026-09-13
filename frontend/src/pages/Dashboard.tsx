@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -25,8 +25,21 @@ import {
   VaccineAllocation,
 } from "../api/client";
 import KpiCard from "../components/KpiCard";
-import RiskMap from "../components/RiskMap";
+// Lazy: Leaflet (+ its CSS) is a big, map-only dependency that isn't needed
+// for the rest of this landing page's first paint — see App.tsx's own
+// per-route splitting for the same reasoning.
+const RiskMap = lazy(() => import("../components/RiskMap"));
+import {
+  allocationByCounty,
+  caseTrend,
+  historicalCaseTrend,
+  historicalRainfallTrend,
+  latestForecastByCounty,
+  seasonalClimatology,
+} from "../lib/analytics";
 import { formatCompact, formatNumber, riskBand } from "../lib/format";
+import { useLanguage } from "../lib/i18n";
+import { useThresholds } from "../lib/useThresholds";
 
 const RISK_COLORS: Record<"high" | "mid" | "low", string> = {
   high: "#d9534f",
@@ -34,82 +47,11 @@ const RISK_COLORS: Record<"high" | "mid" | "low", string> = {
   low: "#2fae8f",
 };
 
-const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
 const tooltipStyle = { background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13 };
 
-/** Most recent forecast per county, keyed by county id. */
-function latestForecastByCounty(forecasts: ForecastRun[]): Map<number, ForecastRun> {
-  const latest = new Map<number, ForecastRun>();
-  for (const f of forecasts) {
-    const current = latest.get(f.county);
-    if (!current || new Date(f.generated_at) > new Date(current.generated_at)) {
-      latest.set(f.county, f);
-    }
-  }
-  return latest;
-}
-
-/** Total confirmed cases per report_date, summed across counties, chronological. */
-function caseTrend(reports: CaseReport[]): { date: string; confirmed: number; suspected: number }[] {
-  const byDate = new Map<string, { confirmed: number; suspected: number }>();
-  for (const r of reports) {
-    const entry = byDate.get(r.report_date) ?? { confirmed: 0, suspected: 0 };
-    entry.confirmed += r.confirmed_cases;
-    entry.suspected += r.suspected_cases;
-    byDate.set(r.report_date, entry);
-  }
-  return [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, v]) => ({ date, ...v }));
-}
-
-/** Sum HistoricalCaseData.confirmed_cases by month across all counties. */
-function historicalCaseTrend(rows: HistoricalCaseData[]): { month: string; cases: number }[] {
-  const byMonth = new Map<string, number>();
-  for (const r of rows) {
-    byMonth.set(r.period_start, (byMonth.get(r.period_start) ?? 0) + r.confirmed_cases);
-  }
-  return [...byMonth.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([month, cases]) => ({ month, cases }));
-}
-
-/** Mean CHIRPS rainfall_mm by month across all counties. */
-function historicalRainfallTrend(rows: ClimateObservation[]): { month: string; rainfall: number }[] {
-  const byMonth = new Map<string, { sum: number; n: number }>();
-  for (const r of rows) {
-    if (r.rainfall_mm == null) continue;
-    const entry = byMonth.get(r.observation_date) ?? { sum: 0, n: 0 };
-    entry.sum += r.rainfall_mm;
-    entry.n += 1;
-    byMonth.set(r.observation_date, entry);
-  }
-  return [...byMonth.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([month, { sum, n }]) => ({ month, rainfall: sum / n }));
-}
-
-/** Mean rainfall_mm by calendar month (Jan..Dec), across every year and county —
- * Kenya's bimodal rain pattern (long rains Mar-May, short rains Oct-Dec). */
-function seasonalClimatology(rows: ClimateObservation[]): { monthLabel: string; rainfall: number }[] {
-  const sums = new Array(12).fill(0);
-  const counts = new Array(12).fill(0);
-  for (const r of rows) {
-    if (r.rainfall_mm == null) continue;
-    const m = new Date(r.observation_date).getUTCMonth();
-    sums[m] += r.rainfall_mm;
-    counts[m] += 1;
-  }
-  return MONTH_LABELS.map((label, i) => ({ monthLabel: label, rainfall: counts[i] ? sums[i] / counts[i] : 0 }));
-}
-
-/** Sum recommended_doses by county, sorted descending. */
-function allocationByCounty(allocations: VaccineAllocation[]): { name: string; doses: number }[] {
-  const byCounty = new Map<string, number>();
-  for (const a of allocations) {
-    byCounty.set(a.county_name, (byCounty.get(a.county_name) ?? 0) + a.recommended_doses);
-  }
-  return [...byCounty.entries()].sort((a, b) => b[1] - a[1]).map(([name, doses]) => ({ name, doses }));
-}
-
 export default function Dashboard() {
+  const { t } = useLanguage();
+  const thresholds = useThresholds();
   const [counties, setCounties] = useState<County[]>([]);
   const [reports, setReports] = useState<CaseReport[]>([]);
   const [forecasts, setForecasts] = useState<ForecastRun[]>([]);
@@ -158,6 +100,12 @@ export default function Dashboard() {
   const totalDeaths = reports.reduce((sum, r) => sum + r.deaths, 0);
   const totalDosesAllocated = allocations.reduce((sum, a) => sum + a.recommended_doses, 0);
 
+  // Per-population rate, not just a raw count — a county's case load only
+  // means something relative to how many people are actually there.
+  const countiesWithPopulation = counties.filter((c) => c.population);
+  const totalPopulation = countiesWithPopulation.reduce((sum, c) => sum + (c.population ?? 0), 0);
+  const casesPer1000 = totalPopulation > 0 ? (totalConfirmed / totalPopulation) * 1000 : null;
+
   const riskValues = [...latestForecasts.values()].map((f) => f.risk_score);
   const avgRisk = riskValues.length > 0 ? riskValues.reduce((a, b) => a + b, 0) / riskValues.length : null;
 
@@ -188,7 +136,7 @@ export default function Dashboard() {
 
   return (
     <div>
-      <h2>Analytics Overview</h2>
+      <h2>{t("page.analyticsOverview")}</h2>
       {error && <p style={{ color: "var(--risk-high)" }}>Could not reach backend: {error}</p>}
 
       {!error && counties.length === 0 && (
@@ -198,16 +146,21 @@ export default function Dashboard() {
       {counties.length > 0 && (
         <>
           <div className="kpi-row">
-            <KpiCard label="Confirmed cases (all time)" value={formatNumber(totalConfirmed)} />
-            <KpiCard label="Deaths reported" value={formatNumber(totalDeaths)} tone={totalDeaths > 0 ? "high" : "neutral"} />
+            <KpiCard label={t("kpi.confirmedCasesAllTime")} value={formatNumber(totalConfirmed)} />
             <KpiCard
-              label="Avg. outbreak risk"
+              label={t("kpi.casesPer1000")}
+              value={casesPer1000 !== null ? casesPer1000.toFixed(1) : "—"}
+              hint={casesPer1000 !== null ? `${countiesWithPopulation.length} counties with known population` : "no population data"}
+            />
+            <KpiCard label={t("kpi.deathsReported")} value={formatNumber(totalDeaths)} tone={totalDeaths > 0 ? "high" : "neutral"} />
+            <KpiCard
+              label={t("kpi.avgOutbreakRisk")}
               value={avgRisk !== null ? avgRisk.toFixed(2) : "—"}
               hint={avgRisk !== null ? `across ${latestForecasts.size} counties` : "no forecast runs yet"}
-              tone={avgRisk !== null ? riskBand(avgRisk) : "neutral"}
+              tone={avgRisk !== null ? riskBand(avgRisk, thresholds) : "neutral"}
             />
             <KpiCard
-              label="Doses allocated"
+              label={t("kpi.dosesAllocated")}
               value={formatCompact(totalDosesAllocated)}
               hint={`${allocations.length} allocation run(s)`}
             />
@@ -278,7 +231,7 @@ export default function Dashboard() {
                       {riskChartData.map((entry) => (
                         <Cell
                           key={entry.name}
-                          fill={entry.hasData ? RISK_COLORS[riskBand(entry.risk)] : "var(--border)"}
+                          fill={entry.hasData ? RISK_COLORS[riskBand(entry.risk, thresholds)] : "var(--border)"}
                         />
                       ))}
                     </Bar>
@@ -291,7 +244,9 @@ export default function Dashboard() {
           <div className="card">
             <h3>Outbreak risk map</h3>
             <p className="card-subtitle">Counties shaded by latest forecast risk score</p>
-            <RiskMap counties={counties} riskByCountyId={riskByCountyId} />
+            <Suspense fallback={<div className="route-loading placeholder-note">Loading map…</div>}>
+              <RiskMap counties={counties} riskByCountyId={riskByCountyId} />
+            </Suspense>
           </div>
 
           <h2 style={{ marginTop: 28 }}>Climate &amp; Historical Signal</h2>
@@ -310,7 +265,7 @@ export default function Dashboard() {
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={rainfallTrend}>
                     <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
-                    <XAxis dataKey="month" stroke="var(--muted)" fontSize={11} interval={5} />
+                    <XAxis dataKey="month" stroke="var(--muted)" fontSize={11} interval="preserveStartEnd" />
                     <YAxis stroke="var(--muted)" fontSize={12} unit="mm" />
                     <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${Number(v).toFixed(1)} mm`, "Rainfall"]} />
                     <Bar dataKey="rainfall" fill="var(--accent)" radius={[3, 3, 0, 0]} />
@@ -336,7 +291,7 @@ export default function Dashboard() {
                       </linearGradient>
                     </defs>
                     <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
-                    <XAxis dataKey="month" stroke="var(--muted)" fontSize={11} interval={5} />
+                    <XAxis dataKey="month" stroke="var(--muted)" fontSize={11} interval="preserveStartEnd" />
                     <YAxis stroke="var(--muted)" fontSize={12} tickFormatter={formatCompact} />
                     <Tooltip contentStyle={tooltipStyle} formatter={(v) => [formatNumber(Number(v)), "Cases"]} />
                     <Area type="monotone" dataKey="cases" stroke="var(--series-1)" fill="url(#historicalGradient)" strokeWidth={2} />

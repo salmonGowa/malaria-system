@@ -11,3 +11,12 @@ dist/
 # Raw CHIRPS/ERA5 rasters — large binaries pulled by data/scripts/, not
 # source code. Re-fetch with the commands in data/README.md.
 /data/raw/
+
+# Playwright e2e run artifacts (frontend/e2e/) — generated, not source.
+/frontend/test-results/
+/frontend/playwright-report/
+/frontend/playwright/.cache/
+
+# vite-plugin-pwa's dev-mode service worker output (vite.config.ts's
+# devOptions) — regenerated on every `npm run dev`, not source.
+/frontend/dev-dist/
