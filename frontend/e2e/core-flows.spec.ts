@@ -14,12 +14,12 @@ import { E2E_USERNAME, selectOnlyCounty, signIn } from "./helpers";
  * one per test — see playwright.config.ts's fullyParallel: false. */
 test.describe.serial("core flows", () => {
   test("sign in", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await signIn(page);
   });
 
   test("generate a forecast", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await signIn(page);
 
     await page.goto("/generate-forecast");
@@ -28,7 +28,7 @@ test.describe.serial("core flows", () => {
 
     // Real ml_service call (trained XGBoost model) — give it a moment.
     await expect(page.getByText(/Generated 1 forecast/)).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator(".generate-results-list")).toContainText("Kisumu");
+    await expect(page.getByTestId("generate-results-list")).toContainText("Kisumu");
 
     // Lands in the stored list, attributed to whoever triggered it (the
     // audit trail this suite is also implicitly exercising).
@@ -39,7 +39,7 @@ test.describe.serial("core flows", () => {
   });
 
   test("run an allocation against that forecast", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await signIn(page);
 
     await page.goto("/run-allocation");
@@ -60,11 +60,11 @@ test.describe.serial("core flows", () => {
 
     // Whichever it is, the page must reach a real, non-error verdict from
     // the backend's verify_chain endpoint — not hang on "Verifying…".
-    await expect(page.locator(".chain-status")).toBeVisible({ timeout: 10_000 });
-    const status = await page.locator(".chain-status").getAttribute("class");
-    expect(status).toMatch(/chain-status-(valid|broken)/);
+    const headline = page.getByText(/^(Chain intact|Chain integrity failure)$/);
+    await expect(headline).toBeVisible({ timeout: 10_000 });
+    const isValid = (await headline.textContent()) === "Chain intact";
 
-    if (status?.includes("chain-status-valid")) {
+    if (isValid) {
       await expect(page.getByText(/All \d[\d,]* records verified/)).toBeVisible();
     } else {
       // This assertion doesn't get here on a normal run — a broken chain

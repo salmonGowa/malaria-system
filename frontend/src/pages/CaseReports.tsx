@@ -2,11 +2,15 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { api, CaseReport } from "../api/client";
+import Card, { CARD_HEADER_ROW_CLASS } from "../components/Card";
 import Pagination from "../components/Pagination";
 import { DownloadIcon } from "../components/icons";
-import { downloadCsv } from "../lib/csv";
 import { useAuth } from "../lib/auth";
+import { btnClass } from "../lib/buttonClasses";
+import { downloadCsv } from "../lib/csv";
+import { FIELD_HINT_CLASS } from "../lib/fieldClasses";
 import { useLanguage } from "../lib/i18n";
+import { PLACEHOLDER_NOTE_CLASS } from "../lib/noteClasses";
 
 const PAGE_SIZE = 50; // matches backend/config/settings.py's REST_FRAMEWORK PAGE_SIZE
 
@@ -48,22 +52,22 @@ export default function CaseReports() {
   return (
     <div>
       <h2>{t("page.caseReports")}</h2>
-      <p className="placeholder-note">
+      <p className={PLACEHOLDER_NOTE_CLASS}>
         Append-only and hash-chained — see docs/architecture.md's "Why CaseReport is hash-chained" for what that
         guarantees and doesn't. A mistaken report is never edited; instead a new report supersedes it — see "Correct"
         below, or Submit Report in the nav for a fresh one.
       </p>
-      <div className="card">
-        <div className="card-header-row">
+      <Card>
+        <div className={CARD_HEADER_ROW_CLASS}>
           {error && <p style={{ color: "var(--risk-high)" }}>Could not reach backend: {error}</p>}
-          {!loading && reports.length === 0 && !error && <p className="placeholder-note">No case reports yet.</p>}
+          {!loading && reports.length === 0 && !error && <p className={PLACEHOLDER_NOTE_CLASS}>No case reports yet.</p>}
           {reports.length > 0 && (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={handleExport}>
+            <button type="button" className={btnClass("secondary", { sm: true })} onClick={handleExport}>
               <DownloadIcon size={14} /> {t("common.exportCsv")}
             </button>
           )}
         </div>
-        <div className="table-scroll" tabIndex={0} role="region" aria-label="Case reports table, scrollable horizontally">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Case reports table, scrollable horizontally">
           <table>
             <thead>
               <tr>
@@ -94,14 +98,14 @@ export default function CaseReports() {
                   </td>
                   <td>
                     {r.superseded_by_id ? (
-                      <span className="field-hint">corrected by #{r.superseded_by_id}</span>
+                      <span className={FIELD_HINT_CLASS}>corrected by #{r.superseded_by_id}</span>
                     ) : r.supersedes ? (
-                      <span className="field-hint">corrects #{r.supersedes}</span>
+                      <span className={FIELD_HINT_CLASS}>corrects #{r.supersedes}</span>
                     ) : null}
                   </td>
                   <td>
                     {username && !r.superseded_by_id && (
-                      <Link to={`/submit-case-report?correct=${r.id}`} className="btn btn-secondary btn-sm">
+                      <Link to={`/submit-case-report?correct=${r.id}`} className={btnClass("secondary", { sm: true })}>
                         {t("common.correct")}
                       </Link>
                     )}
@@ -112,7 +116,7 @@ export default function CaseReports() {
           </table>
         </div>
         <Pagination page={page} pageSize={PAGE_SIZE} count={count} onPageChange={setPage} />
-      </div>
+      </Card>
     </div>
   );
 }

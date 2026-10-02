@@ -21,11 +21,6 @@ from .serializers import (
     VaccineAllocationSerializer,
 )
 
-# ViewSets here are routing glue only: parse the request, hand off to a
-# controller, serialize the result. Business logic lives in controllers/ and
-# services/, not here.
-
-
 class CountyViewSet(
     mixins.CreateModelMixin,
     mixins.UpdateModelMixin,

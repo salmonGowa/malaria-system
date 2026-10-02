@@ -24,7 +24,8 @@ import {
   ModelInfo,
   VaccineAllocation,
 } from "../api/client";
-import KpiCard from "../components/KpiCard";
+import Card, { CARD_SUBTITLE_CLASS, CARD_TITLE_CLASS } from "../components/Card";
+import KpiCard, { KPI_HINT_CLASS, KPI_LABEL_CLASS, KPI_ROW_CLASS, KPI_VALUE_CLASS, kpiCardClass } from "../components/KpiCard";
 // Lazy: Leaflet (+ its CSS) is a big, map-only dependency that isn't needed
 // for the rest of this landing page's first paint — see App.tsx's own
 // per-route splitting for the same reasoning.
@@ -37,8 +38,11 @@ import {
   latestForecastByCounty,
   seasonalClimatology,
 } from "../lib/analytics";
+import { CHART_GRID_CLASS } from "../lib/chartClasses";
+import { FIELD_HINT_CLASS } from "../lib/fieldClasses";
 import { formatCompact, formatNumber, riskBand } from "../lib/format";
 import { useLanguage } from "../lib/i18n";
+import { PLACEHOLDER_NOTE_CLASS, ROUTE_LOADING_CLASS } from "../lib/noteClasses";
 import { useThresholds } from "../lib/useThresholds";
 
 const RISK_COLORS: Record<"high" | "mid" | "low", string> = {
@@ -131,7 +135,7 @@ export default function Dashboard() {
     : [];
 
   if (loading) {
-    return <p className="placeholder-note">Loading analytics…</p>;
+    return <p className={PLACEHOLDER_NOTE_CLASS}>Loading analytics…</p>;
   }
 
   return (
@@ -140,12 +144,12 @@ export default function Dashboard() {
       {error && <p style={{ color: "var(--risk-high)" }}>Could not reach backend: {error}</p>}
 
       {!error && counties.length === 0 && (
-        <p className="placeholder-note">No data yet — seed counties, facilities, and case reports via /admin/.</p>
+        <p className={PLACEHOLDER_NOTE_CLASS}>No data yet — seed counties, facilities, and case reports via /admin/.</p>
       )}
 
       {counties.length > 0 && (
         <>
-          <div className="kpi-row">
+          <div className={KPI_ROW_CLASS}>
             <KpiCard label={t("kpi.confirmedCasesAllTime")} value={formatNumber(totalConfirmed)} />
             <KpiCard
               label={t("kpi.casesPer1000")}
@@ -167,19 +171,19 @@ export default function Dashboard() {
           </div>
 
           {forecastsAreAllPlaceholder && (
-            <p className="placeholder-note">
+            <p className={PLACEHOLDER_NOTE_CLASS}>
               Every forecast currently on record is from the untrained placeholder model
               (predicted_cases and risk_score both 0) — see ml_service/app/forecasting.py.
               Risk figures below aren't meaningful until a real forecast has been generated.
             </p>
           )}
 
-          <div className="chart-grid">
-            <div className="card">
-              <h3>Case trend</h3>
-              <p className="card-subtitle">Confirmed &amp; suspected cases, real reports, summed across all counties</p>
+          <div className={CHART_GRID_CLASS}>
+            <Card>
+              <h3 className={CARD_TITLE_CLASS}>Case trend</h3>
+              <p className={CARD_SUBTITLE_CLASS}>Confirmed &amp; suspected cases, real reports, summed across all counties</p>
               {trend.length === 0 ? (
-                <p className="placeholder-note">No case reports yet.</p>
+                <p className={PLACEHOLDER_NOTE_CLASS}>No case reports yet.</p>
               ) : (
                 <ResponsiveContainer width="100%" height={260}>
                   <AreaChart data={trend}>
@@ -213,13 +217,13 @@ export default function Dashboard() {
                   </AreaChart>
                 </ResponsiveContainer>
               )}
-            </div>
+            </Card>
 
-            <div className="card">
-              <h3>Risk by county</h3>
-              <p className="card-subtitle">Latest forecast run per county, top 12</p>
+            <Card>
+              <h3 className={CARD_TITLE_CLASS}>Risk by county</h3>
+              <p className={CARD_SUBTITLE_CLASS}>Latest forecast run per county, top 12</p>
               {riskChartData.length === 0 ? (
-                <p className="placeholder-note">No forecast runs yet.</p>
+                <p className={PLACEHOLDER_NOTE_CLASS}>No forecast runs yet.</p>
               ) : (
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={riskChartData} layout="vertical" margin={{ left: 24 }}>
@@ -238,29 +242,29 @@ export default function Dashboard() {
                   </BarChart>
                 </ResponsiveContainer>
               )}
-            </div>
+            </Card>
           </div>
 
-          <div className="card">
-            <h3>Outbreak risk map</h3>
-            <p className="card-subtitle">Counties shaded by latest forecast risk score</p>
-            <Suspense fallback={<div className="route-loading placeholder-note">Loading map…</div>}>
+          <Card>
+            <h3 className={CARD_TITLE_CLASS}>Outbreak risk map</h3>
+            <p className={CARD_SUBTITLE_CLASS}>Counties shaded by latest forecast risk score</p>
+            <Suspense fallback={<div className={ROUTE_LOADING_CLASS}>Loading map…</div>}>
               <RiskMap counties={counties} riskByCountyId={riskByCountyId} />
             </Suspense>
-          </div>
+          </Card>
 
           <h2 style={{ marginTop: 28 }}>Climate &amp; Historical Signal</h2>
-          <p className="placeholder-note">
+          <p className={PLACEHOLDER_NOTE_CLASS}>
             The forecasting model's actual training data — real CHIRPS rainfall driving a synthetic case series (see
             docs/architecture.md's "Model results"), not the short real-reporting window above.
           </p>
 
-          <div className="chart-grid">
-            <div className="card">
-              <h3>Historical rainfall</h3>
-              <p className="card-subtitle">Mean monthly CHIRPS rainfall across counties, 5-year window</p>
+          <div className={CHART_GRID_CLASS}>
+            <Card>
+              <h3 className={CARD_TITLE_CLASS}>Historical rainfall</h3>
+              <p className={CARD_SUBTITLE_CLASS}>Mean monthly CHIRPS rainfall across counties, 5-year window</p>
               {rainfallTrend.length === 0 ? (
-                <p className="placeholder-note">No climate observations yet.</p>
+                <p className={PLACEHOLDER_NOTE_CLASS}>No climate observations yet.</p>
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={rainfallTrend}>
@@ -272,13 +276,13 @@ export default function Dashboard() {
                   </BarChart>
                 </ResponsiveContainer>
               )}
-            </div>
+            </Card>
 
-            <div className="card">
-              <h3>Historical case trend</h3>
-              <p className="card-subtitle">Confirmed cases (synthetic_v1), summed across counties, 5-year window</p>
+            <Card>
+              <h3 className={CARD_TITLE_CLASS}>Historical case trend</h3>
+              <p className={CARD_SUBTITLE_CLASS}>Confirmed cases (synthetic_v1), summed across counties, 5-year window</p>
               {historicalTrend.length === 0 ? (
-                <p className="placeholder-note">
+                <p className={PLACEHOLDER_NOTE_CLASS}>
                   No historical case data yet — run data/scripts/generate_synthetic_case_history.py.
                 </p>
               ) : (
@@ -298,15 +302,15 @@ export default function Dashboard() {
                   </AreaChart>
                 </ResponsiveContainer>
               )}
-            </div>
+            </Card>
           </div>
 
-          <div className="chart-grid">
-            <div className="card">
-              <h3>Seasonal rainfall pattern</h3>
-              <p className="card-subtitle">Mean rainfall by calendar month, every year &amp; county averaged together</p>
+          <div className={CHART_GRID_CLASS}>
+            <Card>
+              <h3 className={CARD_TITLE_CLASS}>Seasonal rainfall pattern</h3>
+              <p className={CARD_SUBTITLE_CLASS}>Mean rainfall by calendar month, every year &amp; county averaged together</p>
               {climatology.every((m) => m.rainfall === 0) ? (
-                <p className="placeholder-note">No climate observations yet.</p>
+                <p className={PLACEHOLDER_NOTE_CLASS}>No climate observations yet.</p>
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={climatology}>
@@ -318,17 +322,17 @@ export default function Dashboard() {
                   </BarChart>
                 </ResponsiveContainer>
               )}
-              <p className="field-hint" style={{ marginTop: 8 }}>
+              <p className={FIELD_HINT_CLASS} style={{ marginTop: 8 }}>
                 Kenya's bimodal rains — long rains (Mar–May) and short rains (Oct–Dec) — described in the proposal's
                 Chapter 2.2, visible directly in real CHIRPS data.
               </p>
-            </div>
+            </Card>
 
-            <div className="card">
-              <h3>Vaccine allocation by county</h3>
-              <p className="card-subtitle">Total recommended doses, all allocation runs on record</p>
+            <Card>
+              <h3 className={CARD_TITLE_CLASS}>Vaccine allocation by county</h3>
+              <p className={CARD_SUBTITLE_CLASS}>Total recommended doses, all allocation runs on record</p>
               {allocationData.length === 0 ? (
-                <p className="placeholder-note">No allocation runs yet.</p>
+                <p className={PLACEHOLDER_NOTE_CLASS}>No allocation runs yet.</p>
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={allocationData} layout="vertical" margin={{ left: 24 }}>
@@ -340,20 +344,20 @@ export default function Dashboard() {
                   </BarChart>
                 </ResponsiveContainer>
               )}
-            </div>
+            </Card>
           </div>
 
-          <div className="card">
-            <h3>Model performance</h3>
-            <p className="card-subtitle">
+          <Card>
+            <h3 className={CARD_TITLE_CLASS}>Model performance</h3>
+            <p className={CARD_SUBTITLE_CLASS}>
               Held-out test AUC — the model has never seen these months. Objective 2's target is 0.8.
             </p>
             {modelInfoError ? (
-              <p className="placeholder-note">Model performance unavailable: {modelInfoError}</p>
+              <p className={PLACEHOLDER_NOTE_CLASS}>Model performance unavailable: {modelInfoError}</p>
             ) : !modelInfo ? (
-              <p className="placeholder-note">Loading…</p>
+              <p className={PLACEHOLDER_NOTE_CLASS}>Loading…</p>
             ) : (
-              <div className="model-performance-layout">
+              <div className="grid grid-cols-[1.4fr_1fr] gap-5 items-center max-[900px]:grid-cols-[1fr]">
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={modelComparisonData} layout="vertical" margin={{ left: 8, right: 32 }}>
                     <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" horizontal={false} />
@@ -369,29 +373,29 @@ export default function Dashboard() {
                   </BarChart>
                 </ResponsiveContainer>
 
-                <div className="model-performance-stats">
-                  <div className="kpi-card kpi-tone-low">
-                    <div className="kpi-label">Climate contribution to AUC</div>
-                    <div className="kpi-value">+{modelInfo.climate_contribution_to_auc.toFixed(3)}</div>
-                    <div className="kpi-hint">rainfall + temperature + humidity vs. case history alone</div>
+                <div className="flex flex-col gap-3">
+                  <div className={kpiCardClass("low")}>
+                    <div className={KPI_LABEL_CLASS}>Climate contribution to AUC</div>
+                    <div className={KPI_VALUE_CLASS}>+{modelInfo.climate_contribution_to_auc.toFixed(3)}</div>
+                    <div className={KPI_HINT_CLASS}>rainfall + temperature + humidity vs. case history alone</div>
                   </div>
-                  <div className="kpi-card kpi-tone-neutral">
-                    <div className="kpi-label">Full model sensitivity / specificity</div>
-                    <div className="kpi-value">
+                  <div className={kpiCardClass()}>
+                    <div className={KPI_LABEL_CLASS}>Full model sensitivity / specificity</div>
+                    <div className={KPI_VALUE_CLASS}>
                       {(modelInfo.held_out_test_metrics.sensitivity * 100).toFixed(0)}% /{" "}
                       {(modelInfo.held_out_test_metrics.specificity * 100).toFixed(0)}%
                     </div>
-                    <div className="kpi-hint">on {modelInfo.held_out_test_metrics.n} held-out county-months</div>
+                    <div className={KPI_HINT_CLASS}>on {modelInfo.held_out_test_metrics.n} held-out county-months</div>
                   </div>
                 </div>
               </div>
             )}
             {modelInfo && (
-              <p className="field-hint" style={{ marginTop: 12 }}>
+              <p className={FIELD_HINT_CLASS} style={{ marginTop: 12 }}>
                 {modelInfo.training_data_disclaimer}
               </p>
             )}
-          </div>
+          </Card>
         </>
       )}
     </div>

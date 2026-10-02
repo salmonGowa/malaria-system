@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Spatially aggregate a CHIRPS/ERA5 raster to county-level ClimateObservation rows.
 
 Three ways to run it, in the order you'd actually use them:

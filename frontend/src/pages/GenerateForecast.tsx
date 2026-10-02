@@ -2,10 +2,21 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { api, County, ForecastRun, GenerateForecastsError } from "../api/client";
+import Card from "../components/Card";
 import CountyPicker from "../components/CountyPicker";
 import { UserIcon } from "../components/icons";
 import { useAuth } from "../lib/auth";
+import { FORM_BANNER_ERROR_CLASS, FORM_BANNER_SUCCESS_CLASS } from "../lib/bannerClasses";
+import { btnClass } from "../lib/buttonClasses";
+import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS, FIELD_ROW_CLASS, FIELD_ROW_FIELD_CLASS } from "../lib/fieldClasses";
 import { useLanguage } from "../lib/i18n";
+import { PLACEHOLDER_NOTE_CLASS } from "../lib/noteClasses";
+import {
+  GENERATE_RESULT_ITEM_CLASS,
+  GENERATE_RESULTS_CLASS,
+  GENERATE_RESULTS_LIST_CLASS,
+  RISK_VALUE_CLASS,
+} from "../lib/triggerPanelClasses";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -58,14 +69,14 @@ export default function GenerateForecast() {
   return (
     <div>
       <h2>{t("page.generateForecast")}</h2>
-      <p className="placeholder-note">
+      <p className={PLACEHOLDER_NOTE_CLASS}>
         Calls the trained model (ml_service/app/forecasting.py) for each selected county using its real recent
         rainfall + case history, and stores the result. See results on <Link to="/forecasts">Forecasts</Link>.
       </p>
 
-      <div className="card">
+      <Card>
         {!username && (
-          <p className="form-banner-error">
+          <p className={FORM_BANNER_ERROR_CLASS}>
             <UserIcon size={14} /> Sign in (top right) to generate forecasts.
           </p>
         )}
@@ -73,15 +84,22 @@ export default function GenerateForecast() {
         <form onSubmit={handleSubmit}>
           <CountyPicker counties={counties} selected={selected} onChange={setSelected} />
 
-          <div className="field-row">
-            <label className="field">
-              <span className="field-label">As of date</span>
-              <input type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} disabled={!username} />
+          <div className={FIELD_ROW_CLASS}>
+            <label className={FIELD_ROW_FIELD_CLASS}>
+              <span className={FIELD_LABEL_CLASS}>As of date</span>
+              <input
+                type="date"
+                className={FIELD_INPUT_CLASS}
+                value={asOfDate}
+                onChange={(e) => setAsOfDate(e.target.value)}
+                disabled={!username}
+              />
             </label>
-            <label className="field">
-              <span className="field-label">Horizon (weeks)</span>
+            <label className={FIELD_ROW_FIELD_CLASS}>
+              <span className={FIELD_LABEL_CLASS}>Horizon (weeks)</span>
               <input
                 type="number"
+                className={FIELD_INPUT_CLASS}
                 min={1}
                 max={26}
                 value={horizonWeeks}
@@ -91,29 +109,29 @@ export default function GenerateForecast() {
             </label>
           </div>
 
-          {error && <p className="form-banner-error">{error}</p>}
+          {error && <p className={FORM_BANNER_ERROR_CLASS}>{error}</p>}
 
-          <button type="submit" className="btn btn-primary" disabled={!username || submitting}>
+          <button type="submit" className={btnClass("primary")} disabled={!username || submitting}>
             {submitting ? t("common.generating") : t("common.generateForecasts")}
           </button>
         </form>
 
         {result && (
-          <div className="generate-results">
+          <div className={GENERATE_RESULTS_CLASS}>
             {result.created.length > 0 && (
-              <p className="form-banner-success">
+              <p className={FORM_BANNER_SUCCESS_CLASS}>
                 Generated {result.created.length} forecast{result.created.length === 1 ? "" : "s"}.
               </p>
             )}
-            <ul className="generate-results-list">
+            <ul className={GENERATE_RESULTS_LIST_CLASS} data-testid="generate-results-list">
               {result.created.map((f) => (
-                <li key={f.id}>
+                <li key={f.id} className={GENERATE_RESULT_ITEM_CLASS}>
                   <span>{f.county_name}</span>
-                  <span className="risk-value">risk {f.risk_score.toFixed(3)}</span>
+                  <span className={RISK_VALUE_CLASS}>risk {f.risk_score.toFixed(3)}</span>
                 </li>
               ))}
               {result.errors.map((e) => (
-                <li key={e.county_code}>
+                <li key={e.county_code} className={GENERATE_RESULT_ITEM_CLASS}>
                   <span>{e.county_name}</span>
                   <span style={{ color: "var(--risk-high)" }}>{e.error}</span>
                 </li>
@@ -121,7 +139,7 @@ export default function GenerateForecast() {
             </ul>
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

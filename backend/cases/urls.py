@@ -13,9 +13,6 @@ from .views import (
 )
 
 router = DefaultRouter()
-# basename is now explicit: these ViewSets no longer carry a `queryset` class
-# attribute (get_queryset() delegates to a controller instead), which is what
-# DRF's router would otherwise inspect to infer it.
 router.register("counties", CountyViewSet, basename="county")
 router.register("facilities", HealthFacilityViewSet, basename="healthfacility")
 router.register("case-reports", CaseReportViewSet, basename="casereport")

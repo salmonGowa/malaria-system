@@ -2,10 +2,16 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { api, County, FACILITY_LEVELS, HealthFacility } from "../api/client";
+import Card from "../components/Card";
 import Pagination from "../components/Pagination";
 import { PlusIcon, UserIcon } from "../components/icons";
 import { useAuth } from "../lib/auth";
+import { FORM_BANNER_ERROR_CLASS } from "../lib/bannerClasses";
+import { btnClass } from "../lib/buttonClasses";
+import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS, FIELD_ROW_CLASS, FIELD_ROW_FIELD_CLASS } from "../lib/fieldClasses";
 import { useLanguage } from "../lib/i18n";
+import { TRIGGER_PANEL_CLASS, TRIGGER_PANEL_HEADER_CLASS, TRIGGER_PANEL_TITLE_CLASS } from "../lib/triggerPanelClasses";
+import { PLACEHOLDER_NOTE_CLASS } from "../lib/noteClasses";
 
 const PAGE_SIZE = 50;
 
@@ -21,7 +27,7 @@ function AddFacilityForm({ counties, onCreated }: { counties: County[]; onCreate
 
   if (!open) {
     return (
-      <button type="button" className="btn btn-secondary" onClick={() => setOpen(true)} disabled={!username}>
+      <button type="button" className={btnClass("secondary")} onClick={() => setOpen(true)} disabled={!username}>
         <PlusIcon size={14} /> Add facility
       </button>
     );
@@ -49,21 +55,26 @@ function AddFacilityForm({ counties, onCreated }: { counties: County[]; onCreate
   };
 
   return (
-    <div className="trigger-panel">
-      <div className="trigger-panel-header">
-        <h3>
+    <div className={TRIGGER_PANEL_CLASS}>
+      <div className={TRIGGER_PANEL_HEADER_CLASS}>
+        <h3 className={TRIGGER_PANEL_TITLE_CLASS}>
           <PlusIcon size={16} /> Add facility
         </h3>
       </div>
       <form onSubmit={handleSubmit}>
-        <div className="field-row">
-          <label className="field">
-            <span className="field-label">Name</span>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} required />
+        <div className={FIELD_ROW_CLASS}>
+          <label className={FIELD_ROW_FIELD_CLASS}>
+            <span className={FIELD_LABEL_CLASS}>Name</span>
+            <input type="text" className={FIELD_INPUT_CLASS} value={name} onChange={(e) => setName(e.target.value)} required />
           </label>
-          <label className="field">
-            <span className="field-label">County</span>
-            <select value={countyId} onChange={(e) => setCountyId(e.target.value ? Number(e.target.value) : "")} required>
+          <label className={FIELD_ROW_FIELD_CLASS}>
+            <span className={FIELD_LABEL_CLASS}>County</span>
+            <select
+              className={FIELD_INPUT_CLASS}
+              value={countyId}
+              onChange={(e) => setCountyId(e.target.value ? Number(e.target.value) : "")}
+              required
+            >
               <option value="">Select county…</option>
               {counties.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -72,9 +83,9 @@ function AddFacilityForm({ counties, onCreated }: { counties: County[]; onCreate
               ))}
             </select>
           </label>
-          <label className="field">
-            <span className="field-label">Level</span>
-            <select value={level} onChange={(e) => setLevel(e.target.value)}>
+          <label className={FIELD_ROW_FIELD_CLASS}>
+            <span className={FIELD_LABEL_CLASS}>Level</span>
+            <select className={FIELD_INPUT_CLASS} value={level} onChange={(e) => setLevel(e.target.value)}>
               {FACILITY_LEVELS.map((l) => (
                 <option key={l.value} value={l.value}>
                   {l.label}
@@ -82,17 +93,17 @@ function AddFacilityForm({ counties, onCreated }: { counties: County[]; onCreate
               ))}
             </select>
           </label>
-          <label className="field">
-            <span className="field-label">KMHFL code (optional)</span>
-            <input type="text" value={kmhflCode} onChange={(e) => setKmhflCode(e.target.value)} />
+          <label className={FIELD_ROW_FIELD_CLASS}>
+            <span className={FIELD_LABEL_CLASS}>KMHFL code (optional)</span>
+            <input type="text" className={FIELD_INPUT_CLASS} value={kmhflCode} onChange={(e) => setKmhflCode(e.target.value)} />
           </label>
         </div>
-        {error && <p className="form-banner-error">{error}</p>}
+        {error && <p className={FORM_BANNER_ERROR_CLASS}>{error}</p>}
         <div style={{ display: "flex", gap: 10 }}>
-          <button type="submit" className="btn btn-primary" disabled={submitting}>
+          <button type="submit" className={btnClass("primary")} disabled={submitting}>
             {submitting ? "Adding…" : "Add facility"}
           </button>
-          <button type="button" className="btn btn-secondary" onClick={() => setOpen(false)}>
+          <button type="button" className={btnClass("secondary")} onClick={() => setOpen(false)}>
             Cancel
           </button>
         </div>
@@ -129,10 +140,10 @@ export default function Facilities() {
   return (
     <div>
       <h2>{t("page.facilities")}</h2>
-      <p className="placeholder-note">Reporting sites case reports are submitted against.</p>
+      <p className={PLACEHOLDER_NOTE_CLASS}>Reporting sites case reports are submitted against.</p>
 
       {!username && (
-        <p className="placeholder-note">
+        <p className={PLACEHOLDER_NOTE_CLASS}>
           <UserIcon size={14} /> Sign in to add a facility.
         </p>
       )}
@@ -140,9 +151,9 @@ export default function Facilities() {
         <AddFacilityForm counties={counties} onCreated={load} />
       </div>
 
-      <div className="card">
+      <Card>
         {error && <p style={{ color: "var(--risk-high)" }}>Could not reach backend: {error}</p>}
-        <div className="table-scroll" tabIndex={0} role="region" aria-label="Health facilities table, scrollable horizontally">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Health facilities table, scrollable horizontally">
           <table>
             <thead>
               <tr>
@@ -167,7 +178,7 @@ export default function Facilities() {
           </table>
         </div>
         <Pagination page={page} pageSize={PAGE_SIZE} count={count} onPageChange={setPage} />
-      </div>
+      </Card>
     </div>
   );
 }

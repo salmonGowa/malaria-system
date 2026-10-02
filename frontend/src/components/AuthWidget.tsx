@@ -2,6 +2,8 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { LogOutIcon, UserIcon } from "./icons";
 import { useAuth } from "../lib/auth";
+import { btnClass, iconButtonClass } from "../lib/buttonClasses";
+import { FIELD_CLASS, FIELD_ERROR_CLASS, FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "../lib/fieldClasses";
 import { useLanguage } from "../lib/i18n";
 
 export default function AuthWidget() {
@@ -47,17 +49,17 @@ export default function AuthWidget() {
   };
 
   if (checking) {
-    return <span className="auth-widget-skeleton" aria-hidden="true" />;
+    return <span className="inline-block w-21 h-7.5 rounded-full bg-panel-muted" aria-hidden="true" />;
   }
 
   if (username) {
     return (
-      <div className="auth-widget">
-        <span className="auth-chip">
+      <div className="relative flex items-center gap-1.5">
+        <span className="inline-flex items-center gap-1.5 text-[0.8125rem] font-semibold text-text-secondary bg-panel-muted border border-border py-1 px-2.5 rounded-full">
           <UserIcon size={14} />
           {username}
         </span>
-        <button type="button" className="icon-button" onClick={logout} aria-label={t("common.signOut")} title={t("common.signOut")}>
+        <button type="button" className={iconButtonClass()} onClick={logout} aria-label={t("common.signOut")} title={t("common.signOut")}>
           <LogOutIcon size={16} />
         </button>
       </div>
@@ -65,18 +67,23 @@ export default function AuthWidget() {
   }
 
   return (
-    <div className="auth-widget" ref={rootRef}>
-      <button type="button" className="btn btn-secondary btn-sm" onClick={() => setOpen((v) => !v)}>
+    <div className="relative flex items-center gap-1.5" ref={rootRef}>
+      <button type="button" className={btnClass("secondary", { sm: true })} onClick={() => setOpen((v) => !v)}>
         <UserIcon size={14} />
         <span>{t("common.signIn")}</span>
       </button>
       {open && (
-        <div className="popover auth-popover" role="dialog" aria-label={t("common.signIn")}>
-          <form onSubmit={handleSubmit}>
-            <label className="field">
-              <span className="field-label">{t("common.username")}</span>
+        <div
+          className="absolute top-[calc(100%+8px)] right-0 z-50 bg-panel border border-border rounded-xl shadow-(--shadow-lg) p-4 w-60"
+          role="dialog"
+          aria-label={t("common.signIn")}
+        >
+          <form onSubmit={handleSubmit} className="flex flex-col">
+            <label className={FIELD_CLASS} style={{ marginBottom: 10 }}>
+              <span className={FIELD_LABEL_CLASS}>{t("common.username")}</span>
               <input
                 type="text"
+                className={FIELD_INPUT_CLASS}
                 value={usernameInput}
                 onChange={(e) => setUsernameInput(e.target.value)}
                 autoFocus
@@ -84,18 +91,19 @@ export default function AuthWidget() {
                 required
               />
             </label>
-            <label className="field">
-              <span className="field-label">{t("common.password")}</span>
+            <label className={FIELD_CLASS} style={{ marginBottom: 10 }}>
+              <span className={FIELD_LABEL_CLASS}>{t("common.password")}</span>
               <input
                 type="password"
+                className={FIELD_INPUT_CLASS}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
                 required
               />
             </label>
-            {error && <p className="field-error">{error}</p>}
-            <button type="submit" className="btn btn-primary btn-sm btn-block" disabled={submitting}>
+            {error && <p className={FIELD_ERROR_CLASS}>{error}</p>}
+            <button type="submit" className={btnClass("primary", { sm: true, block: true })} disabled={submitting}>
               {submitting ? t("common.signingIn") : t("common.signIn")}
             </button>
           </form>

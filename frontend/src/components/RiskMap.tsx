@@ -3,7 +3,9 @@ import { GeoJSON, MapContainer, TileLayer, Tooltip } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
 import type { County } from "../api/client";
+import { RISK_MAP_CLASS } from "../lib/chartClasses";
 import { riskBand } from "../lib/format";
+import { PLACEHOLDER_NOTE_CLASS } from "../lib/noteClasses";
 import { useThresholds } from "../lib/useThresholds";
 
 const RISK_COLORS: Record<"high" | "mid" | "low", string> = {
@@ -24,7 +26,7 @@ export default function RiskMap({ counties, riskByCountyId }: RiskMapProps) {
 
   if (withBoundary.length === 0) {
     return (
-      <p className="placeholder-note">
+      <p className={PLACEHOLDER_NOTE_CLASS}>
         No county boundary geometry in the database yet — this map renders once
         counties have a boundary polygon set (see County.boundary in the model, or
         add one via /admin).
@@ -33,7 +35,7 @@ export default function RiskMap({ counties, riskByCountyId }: RiskMapProps) {
   }
 
   return (
-    <MapContainer center={[0.3, 36.5]} zoom={6} scrollWheelZoom={false} className="risk-map">
+    <MapContainer center={[0.3, 36.5]} zoom={6} scrollWheelZoom={false} className={RISK_MAP_CLASS}>
       {/* Plain OSM tiles (no API key needed) with a CSS dark-mode filter applied
           via .leaflet-tile-pane in index.css — hosted dark tile providers
           (CartoDB included) now gate their basemaps behind an account/API key. */}

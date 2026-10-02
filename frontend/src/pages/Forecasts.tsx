@@ -2,13 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 import { CartesianGrid, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from "recharts";
 
 import { api, ForecastRun, HistoricalCaseData } from "../api/client";
+import Card, { CARD_HEADER_ROW_CLASS, CARD_SUBTITLE_CLASS, CARD_TITLE_CLASS } from "../components/Card";
 import Pagination from "../components/Pagination";
 import { DownloadIcon } from "../components/icons";
 import { forecastAccuracy } from "../lib/analytics";
+import { btnClass } from "../lib/buttonClasses";
 import { downloadCsv } from "../lib/csv";
+import { FIELD_HINT_CLASS } from "../lib/fieldClasses";
 import { formatCompact, riskBand } from "../lib/format";
 import { useThresholds } from "../lib/useThresholds";
 import { useLanguage } from "../lib/i18n";
+import { PLACEHOLDER_NOTE_CLASS } from "../lib/noteClasses";
 
 const PAGE_SIZE = 50;
 const tooltipStyle = { background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13 };
@@ -59,15 +63,15 @@ export default function Forecasts() {
   return (
     <div>
       <h2>{t("page.outbreakForecasts")}</h2>
-      <p className="placeholder-note">
+      <p className={PLACEHOLDER_NOTE_CLASS}>
         ml_service/app/forecasting.py loads a trained XGBoost model (see docs/architecture.md's "Model results" for
         honest accuracy numbers). To run a new forecast, see Generate Forecast in the nav.
       </p>
 
       {accuracyData.length > 0 && (
-        <div className="card">
-          <h3>Forecast accuracy</h3>
-          <p className="card-subtitle">
+        <Card>
+          <h3 className={CARD_TITLE_CLASS}>Forecast accuracy</h3>
+          <p className={CARD_SUBTITLE_CLASS}>
             Predicted vs. actual cases, for forecasts whose period falls inside the historical case window (synthetic_v1)
             — points closer to the diagonal are more accurate. {accuracyData.length} comparable forecast(s).
           </p>
@@ -101,17 +105,17 @@ export default function Forecasts() {
               <Scatter data={accuracyData} fill="var(--series-1)" />
             </ScatterChart>
           </ResponsiveContainer>
-        </div>
+        </Card>
       )}
 
-      <div className="card">
-        <div className="card-header-row">
+      <Card>
+        <div className={CARD_HEADER_ROW_CLASS}>
           {error && <p style={{ color: "var(--risk-high)" }}>Could not reach backend: {error}</p>}
-          {!loading && forecasts.length === 0 && !error && <p className="placeholder-note">No forecast runs yet.</p>}
+          {!loading && forecasts.length === 0 && !error && <p className={PLACEHOLDER_NOTE_CLASS}>No forecast runs yet.</p>}
           {forecasts.length > 0 && (
             <button
               type="button"
-              className="btn btn-secondary btn-sm"
+              className={btnClass("secondary", { sm: true })}
               onClick={() =>
                 downloadCsv(
                   "forecasts.csv",
@@ -133,7 +137,7 @@ export default function Forecasts() {
             </button>
           )}
         </div>
-        <div className="table-scroll" tabIndex={0} role="region" aria-label="Outbreak forecasts table, scrollable horizontally">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Outbreak forecasts table, scrollable horizontally">
           <table>
             <thead>
               <tr>
@@ -158,8 +162,8 @@ export default function Forecasts() {
                     <td className={`mono text-risk-${meta?.band ?? "low"}`} style={{ fontWeight: 600 }}>
                       {f.risk_score.toFixed(3)}
                     </td>
-                    <td>{meta?.isPlaceholder ? <span className="placeholder-note">{f.model_name}</span> : f.model_name}</td>
-                    <td className="field-hint">{f.generated_by_username ?? "—"}</td>
+                    <td>{meta?.isPlaceholder ? <span className={PLACEHOLDER_NOTE_CLASS}>{f.model_name}</span> : f.model_name}</td>
+                    <td className={FIELD_HINT_CLASS}>{f.generated_by_username ?? "—"}</td>
                   </tr>
                 );
               })}
@@ -167,7 +171,7 @@ export default function Forecasts() {
           </table>
         </div>
         <Pagination page={page} pageSize={PAGE_SIZE} count={count} onPageChange={setPage} />
-      </div>
+      </Card>
     </div>
   );
 }

@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 
 import { api, VaccineAllocation } from "../api/client";
+import Card, { CARD_HEADER_ROW_CLASS } from "../components/Card";
 import Pagination from "../components/Pagination";
 import { DownloadIcon } from "../components/icons";
+import { btnClass } from "../lib/buttonClasses";
 import { downloadCsv } from "../lib/csv";
+import { FIELD_HINT_CLASS } from "../lib/fieldClasses";
 import { formatNumber } from "../lib/format";
 import { useLanguage } from "../lib/i18n";
+import { PLACEHOLDER_NOTE_CLASS } from "../lib/noteClasses";
 
 const PAGE_SIZE = 50;
 
@@ -45,22 +49,22 @@ export default function Allocations() {
   return (
     <div>
       <h2>{t("page.vaccineAllocationRecommendations")}</h2>
-      <p className="placeholder-note">
+      <p className={PLACEHOLDER_NOTE_CLASS}>
         ml_service/app/allocation.py runs a real risk-weighted linear program (PuLP). To run a new allocation, see
         Run Allocation in the nav.
       </p>
 
-      <div className="card">
-        <div className="card-header-row">
+      <Card>
+        <div className={CARD_HEADER_ROW_CLASS}>
           {error && <p style={{ color: "var(--risk-high)" }}>Could not reach backend: {error}</p>}
-          {!loading && allocations.length === 0 && !error && <p className="placeholder-note">No allocation runs yet.</p>}
+          {!loading && allocations.length === 0 && !error && <p className={PLACEHOLDER_NOTE_CLASS}>No allocation runs yet.</p>}
           {allocations.length > 0 && (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={handleExport}>
+            <button type="button" className={btnClass("secondary", { sm: true })} onClick={handleExport}>
               <DownloadIcon size={14} /> {t("common.exportCsv")}
             </button>
           )}
         </div>
-        <div className="table-scroll" tabIndex={0} role="region" aria-label="Vaccine allocation table, scrollable horizontally">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Vaccine allocation table, scrollable horizontally">
           <table>
             <thead>
               <tr>
@@ -78,14 +82,14 @@ export default function Allocations() {
                   <td>{a.period_start}</td>
                   <td className="mono">{formatNumber(a.recommended_doses)}</td>
                   <td>{a.rationale}</td>
-                  <td className="field-hint">{a.generated_by_username ?? "—"}</td>
+                  <td className={FIELD_HINT_CLASS}>{a.generated_by_username ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         <Pagination page={page} pageSize={PAGE_SIZE} count={count} onPageChange={setPage} />
-      </div>
+      </Card>
     </div>
   );
 }

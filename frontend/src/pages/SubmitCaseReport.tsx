@@ -2,9 +2,20 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { api, CaseReport, County, HealthFacility } from "../api/client";
+import Card from "../components/Card";
 import { AlertIcon, UserIcon } from "../components/icons";
 import { useAuth } from "../lib/auth";
+import { FORM_BANNER_ERROR_CLASS, FORM_BANNER_SUCCESS_CLASS } from "../lib/bannerClasses";
+import { btnClass } from "../lib/buttonClasses";
+import {
+  FIELD_HINT_CLASS,
+  FIELD_INPUT_CLASS,
+  FIELD_LABEL_CLASS,
+  FIELD_ROW_CLASS,
+  FIELD_ROW_FIELD_CLASS,
+} from "../lib/fieldClasses";
 import { useLanguage } from "../lib/i18n";
+import { PLACEHOLDER_NOTE_CLASS } from "../lib/noteClasses";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -109,7 +120,7 @@ export default function SubmitCaseReport() {
   return (
     <div>
       <h2>{original ? t("page.correctReport", { id: original.id }) : t("page.submitCaseReport")}</h2>
-      <p className="placeholder-note">
+      <p className={PLACEHOLDER_NOTE_CLASS}>
         {original ? (
           <>
             Appends a new record that <strong>supersedes</strong> report #{original.id} — the original is never
@@ -126,33 +137,34 @@ export default function SubmitCaseReport() {
         )}
       </p>
 
-      {correctId && loadingOriginal && <p className="placeholder-note">Loading report #{correctId}…</p>}
+      {correctId && loadingOriginal && <p className={PLACEHOLDER_NOTE_CLASS}>Loading report #{correctId}…</p>}
       {originalError && (
-        <p className="form-banner-error">
+        <p className={FORM_BANNER_ERROR_CLASS}>
           <AlertIcon size={14} /> {originalError}
         </p>
       )}
 
       {(!correctId || original) && (
-        <div className="card">
+        <Card>
           {!username && (
-            <p className="form-banner-error">
+            <p className={FORM_BANNER_ERROR_CLASS}>
               <UserIcon size={14} /> Sign in (top right) to submit a report.
             </p>
           )}
 
           {original && (
-            <p className="field-hint" style={{ marginBottom: 14 }}>
+            <p className={FIELD_HINT_CLASS} style={{ marginBottom: 14 }}>
               Originally reported: {original.confirmed_cases} confirmed / {original.suspected_cases} suspected /{" "}
               {original.deaths} deaths on {original.report_date}.
             </p>
           )}
 
           <form onSubmit={handleSubmit}>
-            <div className="field-row">
-              <label className="field">
-                <span className="field-label">County</span>
+            <div className={FIELD_ROW_CLASS}>
+              <label className={FIELD_ROW_FIELD_CLASS}>
+                <span className={FIELD_LABEL_CLASS}>County</span>
                 <select
+                  className={FIELD_INPUT_CLASS}
                   value={countyId}
                   onChange={(e) => setCountyId(e.target.value ? Number(e.target.value) : "")}
                   disabled={!username || !!original}
@@ -165,9 +177,10 @@ export default function SubmitCaseReport() {
                   ))}
                 </select>
               </label>
-              <label className="field">
-                <span className="field-label">Facility</span>
+              <label className={FIELD_ROW_FIELD_CLASS}>
+                <span className={FIELD_LABEL_CLASS}>Facility</span>
                 <select
+                  className={FIELD_INPUT_CLASS}
                   value={facilityId}
                   onChange={(e) => setFacilityId(e.target.value ? Number(e.target.value) : "")}
                   disabled={!username || !countyId || !!original}
@@ -182,40 +195,44 @@ export default function SubmitCaseReport() {
               </label>
             </div>
 
-            <div className="field-row">
-              <label className="field">
-                <span className="field-label">Report date</span>
+            <div className={FIELD_ROW_CLASS}>
+              <label className={FIELD_ROW_FIELD_CLASS}>
+                <span className={FIELD_LABEL_CLASS}>Report date</span>
                 <input
                   type="date"
+                  className={FIELD_INPUT_CLASS}
                   value={reportDate}
                   onChange={(e) => setReportDate(e.target.value)}
                   disabled={!username || !!original}
                 />
               </label>
-              <label className="field">
-                <span className="field-label">Confirmed cases</span>
+              <label className={FIELD_ROW_FIELD_CLASS}>
+                <span className={FIELD_LABEL_CLASS}>Confirmed cases</span>
                 <input
                   type="number"
+                  className={FIELD_INPUT_CLASS}
                   min={0}
                   value={confirmedCases}
                   onChange={(e) => setConfirmedCases(Number(e.target.value))}
                   disabled={!username}
                 />
               </label>
-              <label className="field">
-                <span className="field-label">Suspected cases</span>
+              <label className={FIELD_ROW_FIELD_CLASS}>
+                <span className={FIELD_LABEL_CLASS}>Suspected cases</span>
                 <input
                   type="number"
+                  className={FIELD_INPUT_CLASS}
                   min={0}
                   value={suspectedCases}
                   onChange={(e) => setSuspectedCases(Number(e.target.value))}
                   disabled={!username}
                 />
               </label>
-              <label className="field">
-                <span className="field-label">Deaths</span>
+              <label className={FIELD_ROW_FIELD_CLASS}>
+                <span className={FIELD_LABEL_CLASS}>Deaths</span>
                 <input
                   type="number"
+                  className={FIELD_INPUT_CLASS}
                   min={0}
                   value={deaths}
                   onChange={(e) => setDeaths(Number(e.target.value))}
@@ -224,18 +241,18 @@ export default function SubmitCaseReport() {
               </label>
             </div>
 
-            {error && <p className="form-banner-error">{error}</p>}
+            {error && <p className={FORM_BANNER_ERROR_CLASS}>{error}</p>}
             {success && (
-              <p className="form-banner-success">
+              <p className={FORM_BANNER_SUCCESS_CLASS}>
                 {original ? `Correction submitted — added to the chain, superseding #${original.id}.` : "Report submitted — added to the chain."}
               </p>
             )}
 
-            <button type="submit" className="btn btn-primary" disabled={!username || submitting || !countyId || !facilityId}>
+            <button type="submit" className={btnClass("primary")} disabled={!username || submitting || !countyId || !facilityId}>
               {submitting ? t("common.submitting") : original ? t("common.submitCorrection") : t("common.submitReport")}
             </button>
           </form>
-        </div>
+        </Card>
       )}
     </div>
   );

@@ -3,9 +3,12 @@ import { Link, useParams } from "react-router-dom";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { api, CaseReport, ClimateObservation, County, ForecastRun, HealthFacility, VaccineAllocation } from "../api/client";
-import KpiCard from "../components/KpiCard";
+import Card, { CARD_SUBTITLE_CLASS, CARD_TITLE_CLASS } from "../components/Card";
+import KpiCard, { KPI_ROW_CLASS } from "../components/KpiCard";
 import { caseTrend, historicalRainfallTrend } from "../lib/analytics";
+import { CHART_GRID_CLASS } from "../lib/chartClasses";
 import { formatNumber, riskBand } from "../lib/format";
+import { PLACEHOLDER_NOTE_CLASS } from "../lib/noteClasses";
 import { useThresholds } from "../lib/useThresholds";
 
 const tooltipStyle = { background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13 };
@@ -59,25 +62,25 @@ export default function CountyDetail() {
     .slice()
     .sort((a, b) => new Date(b.generated_at).getTime() - new Date(a.generated_at).getTime())[0];
 
-  if (loading) return <p className="placeholder-note">Loading…</p>;
+  if (loading) return <p className={PLACEHOLDER_NOTE_CLASS}>Loading…</p>;
   if (error) return <p style={{ color: "var(--risk-high)" }}>Could not reach backend: {error}</p>;
-  if (!county) return <p className="placeholder-note">County not found.</p>;
+  if (!county) return <p className={PLACEHOLDER_NOTE_CLASS}>County not found.</p>;
 
   return (
     <div>
-      <p className="placeholder-note" style={{ borderLeftColor: "var(--muted)" }}>
+      <p className={PLACEHOLDER_NOTE_CLASS} style={{ borderLeftColor: "var(--muted)" }}>
         <Link to="/counties">← All counties</Link>
       </p>
       <h2>
         {county.name} <span className="mono" style={{ color: "var(--muted)", fontSize: "1rem", fontWeight: 500 }}>{county.code}</span>
       </h2>
-      <p className="placeholder-note">
+      <p className={PLACEHOLDER_NOTE_CLASS}>
         Population {county.population ? formatNumber(county.population) : "unknown"} ·{" "}
         {county.is_endemic_focus ? "in the project's endemic-focus scope" : "outside the endemic-focus scope"} ·{" "}
         boundary {county.boundary ? "set" : "missing"}
       </p>
 
-      <div className="kpi-row">
+      <div className={KPI_ROW_CLASS}>
         <KpiCard label="Confirmed cases (all time)" value={formatNumber(totalConfirmed)} />
         <KpiCard
           label="Cases per 1,000 population"
@@ -94,12 +97,12 @@ export default function CountyDetail() {
         <KpiCard label="Doses allocated" value={formatNumber(totalDoses)} hint={`${allocations.length} allocation run(s)`} />
       </div>
 
-      <div className="chart-grid">
-        <div className="card">
-          <h3>Case trend</h3>
-          <p className="card-subtitle">Confirmed &amp; suspected, real reports for {county.name}</p>
+      <div className={CHART_GRID_CLASS}>
+        <Card>
+          <h3 className={CARD_TITLE_CLASS}>Case trend</h3>
+          <p className={CARD_SUBTITLE_CLASS}>Confirmed &amp; suspected, real reports for {county.name}</p>
           {trend.length === 0 ? (
-            <p className="placeholder-note">No case reports for this county yet.</p>
+            <p className={PLACEHOLDER_NOTE_CLASS}>No case reports for this county yet.</p>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
               <AreaChart data={trend}>
@@ -117,13 +120,13 @@ export default function CountyDetail() {
               </AreaChart>
             </ResponsiveContainer>
           )}
-        </div>
+        </Card>
 
-        <div className="card">
-          <h3>Rainfall history</h3>
-          <p className="card-subtitle">Mean monthly CHIRPS rainfall for {county.name}</p>
+        <Card>
+          <h3 className={CARD_TITLE_CLASS}>Rainfall history</h3>
+          <p className={CARD_SUBTITLE_CLASS}>Mean monthly CHIRPS rainfall for {county.name}</p>
           {rainfallTrend.length === 0 ? (
-            <p className="placeholder-note">No climate observations for this county yet.</p>
+            <p className={PLACEHOLDER_NOTE_CLASS}>No climate observations for this county yet.</p>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={rainfallTrend}>
@@ -135,19 +138,19 @@ export default function CountyDetail() {
               </BarChart>
             </ResponsiveContainer>
           )}
-        </div>
+        </Card>
       </div>
 
-      <div className="chart-grid">
-        <div className="card">
-          <h3>Recent forecasts</h3>
-          <p className="card-subtitle">Most recent 10 runs for {county.name}</p>
+      <div className={CHART_GRID_CLASS}>
+        <Card>
+          <h3 className={CARD_TITLE_CLASS}>Recent forecasts</h3>
+          <p className={CARD_SUBTITLE_CLASS}>Most recent 10 runs for {county.name}</p>
           {forecasts.length === 0 ? (
-            <p className="placeholder-note">
+            <p className={PLACEHOLDER_NOTE_CLASS}>
               No forecasts yet — see <Link to="/generate-forecast">Generate Forecast</Link>.
             </p>
           ) : (
-            <div className="table-scroll" tabIndex={0} role="region" aria-label="Recent forecasts table, scrollable horizontally">
+            <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Recent forecasts table, scrollable horizontally">
               <table>
                 <thead>
                   <tr>
@@ -176,17 +179,17 @@ export default function CountyDetail() {
               </table>
             </div>
           )}
-        </div>
+        </Card>
 
-        <div className="card">
-          <h3>Recent allocations</h3>
-          <p className="card-subtitle">Most recent 10 runs for {county.name}</p>
+        <Card>
+          <h3 className={CARD_TITLE_CLASS}>Recent allocations</h3>
+          <p className={CARD_SUBTITLE_CLASS}>Most recent 10 runs for {county.name}</p>
           {allocations.length === 0 ? (
-            <p className="placeholder-note">
+            <p className={PLACEHOLDER_NOTE_CLASS}>
               No allocations yet — see <Link to="/run-allocation">Run Allocation</Link>.
             </p>
           ) : (
-            <div className="table-scroll" tabIndex={0} role="region" aria-label="Recent allocations table, scrollable horizontally">
+            <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Recent allocations table, scrollable horizontally">
               <table>
                 <thead>
                   <tr>
@@ -209,18 +212,18 @@ export default function CountyDetail() {
               </table>
             </div>
           )}
-        </div>
+        </Card>
       </div>
 
-      <div className="card">
-        <h3>Facilities</h3>
-        <p className="card-subtitle">
+      <Card>
+        <h3 className={CARD_TITLE_CLASS}>Facilities</h3>
+        <p className={CARD_SUBTITLE_CLASS}>
           Reporting sites in {county.name} — see <Link to="/facilities">Facilities</Link> to add one.
         </p>
         {facilities.length === 0 ? (
-          <p className="placeholder-note">No facilities recorded for this county yet.</p>
+          <p className={PLACEHOLDER_NOTE_CLASS}>No facilities recorded for this county yet.</p>
         ) : (
-          <div className="table-scroll" tabIndex={0} role="region" aria-label="Facilities table, scrollable horizontally">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Facilities table, scrollable horizontally">
             <table>
               <thead>
                 <tr>
@@ -241,7 +244,7 @@ export default function CountyDetail() {
             </table>
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

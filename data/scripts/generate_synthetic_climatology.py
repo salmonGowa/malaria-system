@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Generate synthetic monthly temperature/humidity ClimateObservation rows.
 
 Real CHIRPS rainfall (data/scripts/aggregate_climate.py) is used wherever

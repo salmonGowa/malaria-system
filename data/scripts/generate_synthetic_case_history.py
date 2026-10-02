@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Generate synthetic monthly HistoricalCaseData for model training/evaluation.
 
 Real 5-year county-monthly malaria case data isn't obtainable within this

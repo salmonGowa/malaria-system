@@ -1,3 +1,5 @@
+import { btnClass } from "../lib/buttonClasses";
+
 interface PaginationProps {
   page: number;
   pageSize: number;
@@ -13,28 +15,23 @@ export default function Pagination({ page, pageSize, count, onPageChange }: Pagi
   const rangeEnd = Math.min(page * pageSize, count);
 
   return (
-    <div className="pagination">
-      <span className="pagination-summary">
+    // Tailwind incremental migration (see index.css's own "Tailwind" header
+    // comment) — this component's own layout classes are Tailwind
+    // utilities now; the buttons use the shared btnClass() helper
+    // (lib/buttonClasses.ts), the same one every other page's buttons are
+    // migrating to.
+    <div className="flex flex-wrap items-center justify-between gap-2.5 mt-4 pt-3.5 border-t border-border text-[0.8125rem] text-muted">
+      <span className="tabular-nums">
         {rangeStart}–{rangeEnd} of {count}
       </span>
-      <div className="pagination-controls">
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
-          onClick={() => onPageChange(page - 1)}
-          disabled={page <= 1}
-        >
+      <div className="flex items-center gap-2.5">
+        <button type="button" className={btnClass("secondary", { sm: true })} onClick={() => onPageChange(page - 1)} disabled={page <= 1}>
           Previous
         </button>
-        <span className="pagination-page">
+        <span className="tabular-nums text-text-secondary whitespace-nowrap">
           Page {page} of {totalPages}
         </span>
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
-          onClick={() => onPageChange(page + 1)}
-          disabled={page >= totalPages}
-        >
+        <button type="button" className={btnClass("secondary", { sm: true })} onClick={() => onPageChange(page + 1)} disabled={page >= totalPages}>
           Next
         </button>
       </div>

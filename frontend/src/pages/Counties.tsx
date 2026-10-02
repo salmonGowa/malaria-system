@@ -2,10 +2,17 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { api, County } from "../api/client";
+import Card, { CARD_SUBTITLE_CLASS } from "../components/Card";
+import { COUNTY_PICKER_ITEM_CLASS } from "../components/CountyPicker";
 import { PlusIcon, UserIcon } from "../components/icons";
 import { useAuth } from "../lib/auth";
+import { FORM_BANNER_ERROR_CLASS } from "../lib/bannerClasses";
+import { btnClass } from "../lib/buttonClasses";
+import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS, FIELD_ROW_CLASS, FIELD_ROW_FIELD_CLASS } from "../lib/fieldClasses";
 import { formatNumber } from "../lib/format";
 import { useLanguage } from "../lib/i18n";
+import { PLACEHOLDER_NOTE_CLASS } from "../lib/noteClasses";
+import { TRIGGER_PANEL_CLASS, TRIGGER_PANEL_HEADER_CLASS, TRIGGER_PANEL_TITLE_CLASS } from "../lib/triggerPanelClasses";
 
 function AddCountyForm({ onCreated }: { onCreated: () => void }) {
   const { username } = useAuth();
@@ -19,7 +26,7 @@ function AddCountyForm({ onCreated }: { onCreated: () => void }) {
 
   if (!open) {
     return (
-      <button type="button" className="btn btn-secondary" onClick={() => setOpen(true)} disabled={!username}>
+      <button type="button" className={btnClass("secondary")} onClick={() => setOpen(true)} disabled={!username}>
         <PlusIcon size={14} /> Add county
       </button>
     );
@@ -49,40 +56,47 @@ function AddCountyForm({ onCreated }: { onCreated: () => void }) {
   };
 
   return (
-    <div className="trigger-panel">
-      <div className="trigger-panel-header">
-        <h3>
+    <div className={TRIGGER_PANEL_CLASS}>
+      <div className={TRIGGER_PANEL_HEADER_CLASS}>
+        <h3 className={TRIGGER_PANEL_TITLE_CLASS}>
           <PlusIcon size={16} /> Add county
         </h3>
       </div>
-      <p className="card-subtitle" style={{ marginTop: -6 }}>
+      <p className={CARD_SUBTITLE_CLASS} style={{ marginTop: -6 }}>
         Boundary geometry isn't set here — see data/scripts/load_county_boundaries.py once the county exists.
       </p>
       <form onSubmit={handleSubmit}>
-        <div className="field-row">
-          <label className="field">
-            <span className="field-label">Name</span>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} required />
+        <div className={FIELD_ROW_CLASS}>
+          <label className={FIELD_ROW_FIELD_CLASS}>
+            <span className={FIELD_LABEL_CLASS}>Name</span>
+            <input type="text" className={FIELD_INPUT_CLASS} value={name} onChange={(e) => setName(e.target.value)} required />
           </label>
-          <label className="field">
-            <span className="field-label">Code</span>
-            <input type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="KEN-032" required />
+          <label className={FIELD_ROW_FIELD_CLASS}>
+            <span className={FIELD_LABEL_CLASS}>Code</span>
+            <input
+              type="text"
+              className={FIELD_INPUT_CLASS}
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="KEN-032"
+              required
+            />
           </label>
-          <label className="field">
-            <span className="field-label">Population</span>
-            <input type="number" min={0} value={population} onChange={(e) => setPopulation(e.target.value)} />
+          <label className={FIELD_ROW_FIELD_CLASS}>
+            <span className={FIELD_LABEL_CLASS}>Population</span>
+            <input type="number" className={FIELD_INPUT_CLASS} min={0} value={population} onChange={(e) => setPopulation(e.target.value)} />
           </label>
         </div>
-        <label className="county-picker-item" style={{ marginBottom: 12 }}>
+        <label className={COUNTY_PICKER_ITEM_CLASS} style={{ marginBottom: 12 }}>
           <input type="checkbox" checked={isEndemicFocus} onChange={(e) => setIsEndemicFocus(e.target.checked)} />
           <span>In the project's endemic-county scope</span>
         </label>
-        {error && <p className="form-banner-error">{error}</p>}
+        {error && <p className={FORM_BANNER_ERROR_CLASS}>{error}</p>}
         <div style={{ display: "flex", gap: 10 }}>
-          <button type="submit" className="btn btn-primary" disabled={submitting}>
+          <button type="submit" className={btnClass("primary")} disabled={submitting}>
             {submitting ? "Adding…" : "Add county"}
           </button>
-          <button type="button" className="btn btn-secondary" onClick={() => setOpen(false)}>
+          <button type="button" className={btnClass("secondary")} onClick={() => setOpen(false)}>
             Cancel
           </button>
         </div>
@@ -109,13 +123,13 @@ export default function Counties() {
   return (
     <div>
       <h2>{t("page.counties")}</h2>
-      <p className="placeholder-note">
+      <p className={PLACEHOLDER_NOTE_CLASS}>
         The reference list every other page filters against — click through for a county's full case, climate,
         forecast, and allocation history.
       </p>
 
       {!username && (
-        <p className="placeholder-note">
+        <p className={PLACEHOLDER_NOTE_CLASS}>
           <UserIcon size={14} /> Sign in to add a county.
         </p>
       )}
@@ -123,9 +137,9 @@ export default function Counties() {
         <AddCountyForm onCreated={load} />
       </div>
 
-      <div className="card">
+      <Card>
         {error && <p style={{ color: "var(--risk-high)" }}>Could not reach backend: {error}</p>}
-        <div className="table-scroll" tabIndex={0} role="region" aria-label="Counties table, scrollable horizontally">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Counties table, scrollable horizontally">
           <table>
             <thead>
               <tr>
@@ -151,7 +165,7 @@ export default function Counties() {
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

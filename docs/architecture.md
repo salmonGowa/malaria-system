@@ -109,6 +109,37 @@ nav) shows this warning next to the chart, not just a number, plus a
 downloadable template CSV shaped like the single-wave case this model
 actually handles well.
 
+### Report, suggestions & decision support (frontend)
+
+`frontend/src/lib/uploadInsights.ts` + Upload & Simulate's "3. Report,
+suggestions & decision support" section turn the raw fit/projection into
+the same plain-language, traceable-reasons format as the Decision Support
+page (`lib/recommendations.ts`) — a `concern` rating (high/mid/low),
+suggested next steps, and a "Why?" breakdown — but for this upload instead
+of a stored county forecast. Deliberately does **not** invent a 0-1 risk
+score that looks like the trained model's calibrated output: the uploaded
+dataset was never part of that model's training distribution, so a number
+dressed up as a calibrated probability here would be false confidence.
+`concern` is instead driven by comparing the *peak* of the projection to
+the peak already seen in the uploaded data (`projectedPeak` vs
+`historicalPeak`, both found by scanning every row) — not by where the
+projection happens to land on its last month.
+
+That peak-vs-peak comparison replaced an earlier, wrong version that
+compared only the first and last projected values, found by testing
+against a real uploaded series, not just reading the code: `forecast()`
+re-simulates a fresh SEIR wave forward from wherever the fit left off, so a
+projection routinely rises, peaks mid-window, and falls again before the
+horizon ends — a real second wave a first/last comparison misses entirely
+whenever the window happens to close on a low point. The same live test
+surfaced a second issue: a poorly-constrained fitted `reporting_fraction`
+can imply more "true infections" than the uploaded population itself (an
+outlier fit — β's rainfall term k≈0 alongside a 1.1% reporting fraction
+implied 622K infections against a 500K population). Rather than show that
+confidently, `estimatedTrueInfections` is `null` (surfaced as "—" with an
+explanation, not omitted silently) whenever it would exceed the population.
+Both are regression-tested in `lib/uploadInsights.test.ts`.
+
 If you later decide you *do* want real distributed tamper-evidence (e.g. multiple
 independent county health offices each holding a copy of the chain so no single
 party can rewrite it), that's a bigger step — worth a deliberate decision once the

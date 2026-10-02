@@ -13,7 +13,10 @@ export default function OfflineBanner() {
   if (online) return null;
 
   return (
-    <div className="offline-banner" role="status">
+    <div
+      className="sticky top-0 z-31 flex items-center gap-2 py-2 px-5 bg-risk-mid-soft border-b border-risk-mid text-text text-[0.8125rem]"
+      role="status"
+    >
       <AlertIcon size={14} />
       <span>{t("offline.banner")}</span>
     </div>

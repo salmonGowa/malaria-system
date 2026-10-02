@@ -25,7 +25,7 @@ export async function signIn(page: Page, username = E2E_USERNAME, password = E2E
  * until the picker settles on exactly one county checked — is robust to
  * that race without needing to know when the last fetch will resolve. */
 export async function selectOnlyCounty(page: Page, countyName: string) {
-  const picker = page.locator(".county-picker");
+  const picker = page.getByTestId("county-picker");
   const countyBox = picker.getByLabel(countyName, { exact: true });
   const allBox = picker.getByLabel(/All counties/);
 

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Seed/update the endemic-focus County rows this project targets.
 
 The scaffold only ever had 5 counties created ad hoc (Django shell, not a

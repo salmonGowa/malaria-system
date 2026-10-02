@@ -1,0 +1,699 @@
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
+
+// Light values first, then the dark override for each token.
+const TOKENS =
+  "[--lp-bg:#eef1fb] dark:[--lp-bg:#070912] " +
+  "[--lp-mesh-a:#7C6CFF] dark:[--lp-mesh-a:#6D28FF] " +
+  "[--lp-mesh-b:#2FBFAE] dark:[--lp-mesh-b:#00C9AE] " +
+  "[--lp-mesh-c:#FF7A59] dark:[--lp-mesh-c:#FF5C7A] " +
+  "[--lp-mesh-d:#3E8EFF] dark:[--lp-mesh-d:#3E7BFF] " +
+  "[--lp-mesh-e:#FFC857] dark:[--lp-mesh-e:#FFB020] " +
+  "[--lp-ink-900:#0B1220] dark:[--lp-ink-900:#F3F5FC] " +
+  "[--lp-ink-700:#333c53] dark:[--lp-ink-700:#C7CCDE] " +
+  "[--lp-ink-500:#5b6479] dark:[--lp-ink-500:#98a0ba] " +
+  // Darkened from #7a8299 (3.39:1 on --lp-bg, under the 4.5:1 AA text
+  // threshold — caught by an axe-core scan of the footer meta text); it
+  // backs every caption-style element, so it's fixed at the token.
+  "[--lp-ink-400:#566173] dark:[--lp-ink-400:#727a94] " +
+  "[--lp-glass:rgba(255,255,255,0.50)] dark:[--lp-glass:rgba(20,23,40,0.50)] " +
+  "[--lp-glass-strong:rgba(255,255,255,0.72)] dark:[--lp-glass-strong:rgba(24,28,48,0.74)] " +
+  "[--lp-glass-border:rgba(255,255,255,0.85)] dark:[--lp-glass-border:rgba(255,255,255,0.14)] " +
+  "[--lp-glass-hi:rgba(255,255,255,0.65)] dark:[--lp-glass-hi:rgba(255,255,255,0.10)] " +
+  "[--lp-glass-shadow:rgba(31,41,74,0.16)] dark:[--lp-glass-shadow:rgba(0,0,0,0.55)] " +
+  "[--lp-glass-glow:rgba(255,255,255,0.35)] dark:[--lp-glass-glow:rgba(255,255,255,0.14)] " +
+  "[--lp-accent:#5B3DF6] dark:[--lp-accent:#8C7CFF] " +
+  "[--lp-accent-ink:#ffffff] dark:[--lp-accent-ink:#0B0D16] " +
+  "[--lp-accent-soft:rgba(91,61,246,0.12)] dark:[--lp-accent-soft:rgba(140,124,255,0.16)] " +
+  "[--lp-red:#D8434B] dark:[--lp-red:#FF6B72] " +
+  "[--lp-red-bg:rgba(216,67,75,0.12)] dark:[--lp-red-bg:rgba(255,107,114,0.14)] " +
+  "[--lp-amber:#B8790B] dark:[--lp-amber:#F2B33D] " +
+  "[--lp-amber-bg:rgba(224,158,26,0.16)] dark:[--lp-amber-bg:rgba(242,179,61,0.14)] " +
+  "[--lp-green:#0E9A62] dark:[--lp-green:#3DDBA0] " +
+  "[--lp-green-bg:rgba(14,154,98,0.14)] dark:[--lp-green-bg:rgba(61,219,160,0.14)] " +
+  "[--lp-rail:rgba(11,18,32,0.14)] dark:[--lp-rail:rgba(255,255,255,0.14)] " +
+  "[color-scheme:light] dark:[color-scheme:dark]";
+
+// Frosted panel + a pointer-follow highlight (::before, positioned by the
+// --mx/--my the mousemove effect below writes). Pair with `data-glass`.
+const GLASS =
+  "relative isolate overflow-hidden rounded-[28px] border border-(--lp-glass-border) bg-(--lp-glass) " +
+  "backdrop-blur-[22px] backdrop-saturate-[1.6] " +
+  "shadow-[0_18px_50px_-12px_var(--lp-glass-shadow),inset_0_1px_0_var(--lp-glass-hi)] " +
+  "before:content-[''] before:absolute before:inset-0 before:z-[1] before:pointer-events-none " +
+  "before:bg-[radial-gradient(420px_circle_at_var(--mx,50%)_var(--my,0%),var(--lp-glass-glow),transparent_60%)] " +
+  "before:opacity-0 before:transition-opacity before:duration-[400ms] hover:before:opacity-100";
+
+const DISPLAY = "font-lp-display text-balance tracking-[-0.01em] m-0";
+
+const BTN =
+  "font-lp-display font-semibold text-[0.95rem] px-6 py-[13px] rounded-full no-underline " +
+  "inline-flex items-center gap-2 border border-transparent cursor-pointer " +
+  "transition-[transform,box-shadow] duration-200 ease-in-out hover:-translate-y-0.5";
+const BTN_PRIMARY = `${BTN} bg-(--lp-accent) text-(--lp-accent-ink) shadow-[0_10px_26px_-8px_var(--lp-accent-soft)]`;
+const BTN_GHOST = `${BTN} bg-(--lp-glass-strong) text-(--lp-ink-900) border-(--lp-glass-border) backdrop-blur-md`;
+
+const CHIP =
+  "font-mono text-[0.72rem] text-(--lp-ink-500) bg-(--lp-glass-strong) border border-(--lp-glass-border) " +
+  "px-[11px] py-[5px] rounded-full";
+
+const CAPTION = "font-mono text-[0.74rem] text-(--lp-ink-400)";
+
+type Band = "red" | "amber" | "green";
+
+const PILL_BAND: Record<Band, string> = {
+  red: "text-(--lp-red) bg-(--lp-red-bg)",
+  amber: "text-(--lp-amber) bg-(--lp-amber-bg)",
+  green: "text-(--lp-green) bg-(--lp-green-bg)",
+};
+
+function Pill({ band, children }: { band: Band; children: ReactNode }) {
+  return (
+    <span
+      className={
+        "font-mono text-[0.68rem] font-semibold tracking-[0.02em] px-2.5 py-1 rounded-full " +
+        "inline-flex items-center gap-1.5 before:content-[''] before:size-1.5 before:rounded-full before:bg-current " +
+        PILL_BAND[band]
+      }
+    >
+      {children}
+    </span>
+  );
+}
+
+const SECTION_HEAD = "max-w-[640px] mb-11";
+const KICKER = "block font-mono text-[0.74rem] uppercase tracking-[0.08em] text-(--lp-ink-500) mb-3";
+const SECTION_H2 = `${DISPLAY} text-[clamp(1.7rem,3.4vw,2.3rem)] font-[650] leading-[1.12] text-(--lp-ink-900)`;
+const SECTION_P = "mt-3.5 mb-0 text-[1.02rem] text-(--lp-ink-700) leading-[1.55]";
+
+const RISK_ROWS: { name: string; band: Band; label: string }[] = [
+  { name: "Kisumu", band: "red", label: "Elevated" },
+  { name: "Busia", band: "red", label: "Elevated" },
+  { name: "Kilifi", band: "amber", label: "Watch" },
+  { name: "Kakamega", band: "amber", label: "Watch" },
+  { name: "Taita Taveta", band: "green", label: "Stable" },
+];
+
+const ALLOC_ROWS = [
+  { name: "Kisumu", pct: 88, tier: "High" },
+  { name: "Busia", pct: 74, tier: "High" },
+  { name: "Kilifi", pct: 52, tier: "Med" },
+  { name: "Migori", pct: 41, tier: "Med" },
+  { name: "Taita Taveta", pct: 16, tier: "Low" },
+];
+
+const CHAIN_DATA = [
+  { id: "001", hash: "a3f9…21c4" },
+  { id: "002", hash: "7e0b…88af" },
+  { id: "003", hash: "c412…5d0e" },
+  { id: "004", hash: "91aa…f376" },
+  { id: "005", hash: "2c8d…b0e1" },
+];
+
+const STATS = [
+  { num: "14", label: "counties modeled, lake & coastal zones" },
+  { num: "5", label: "tools in one pipeline, report to allocation" },
+  { num: "2", label: "languages — English & Kiswahili" },
+  { num: "0", label: "login needed to run a simulation" },
+  { num: "∞", label: "forecasts logged to an audit trail" },
+];
+
+const FLOW_STEPS = [
+  { title: "Report", body: "A facility logs a case. It's appended to the hash chain, linked to every record before it." },
+  { title: "Forecast", body: "The model reads rainfall and case history together and projects risk, county by county." },
+  { title: "Optimize", body: "The solver allocates available doses across counties by projected risk, not by default." },
+  { title: "Act", body: "An officer gets a color-coded recommendation, in their language, with the reasoning attached." },
+];
+
+const DECISIONS: { county: string; band: Band; label: string; text: string; why: string }[] = [
+  {
+    county: "Kisumu",
+    band: "red",
+    label: "Elevated",
+    text: "Pre-position rapid tests and nets in high-transmission wards before the long rains peak.",
+    why: "Why: rainfall trend + 3-week case rise match past outbreak seasons",
+  },
+  {
+    county: "Kilifi",
+    band: "amber",
+    label: "Watch",
+    text: "Increase vector surveillance at coastal facilities over the next reporting cycle.",
+    why: "Why: rainfall above average, case counts still within baseline",
+  },
+  {
+    county: "Taita Taveta",
+    band: "green",
+    label: "Stable",
+    text: "Maintain routine reporting cadence — no action required.",
+    why: "Why: no rainfall or case signal above baseline",
+  },
+];
+
+function BrandMark({ gradientId, className }: { gradientId: string; className: string }) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="15" stroke={`url(#${gradientId})`} strokeWidth="1.6" opacity="0.55" />
+      <circle cx="16" cy="16" r="10" stroke={`url(#${gradientId})`} strokeWidth="1.6" opacity="0.8" />
+      <circle cx="16" cy="16" r="3.2" fill={`url(#${gradientId})`} />
+      <defs>
+        <linearGradient id={gradientId} x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#7C6CFF" />
+          <stop offset="1" stopColor="#2FBFAE" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
+/** One numbered platform feature: copy on one side, a glass demo panel on
+ * the other. `reverse` swaps sides from 820px up (stacked below that). */
+function Feature({
+  id,
+  num,
+  title,
+  body,
+  chips,
+  reverse = false,
+  first = false,
+  children,
+}: {
+  id?: string;
+  num: string;
+  title: string;
+  body: string;
+  chips: string[];
+  reverse?: boolean;
+  first?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      id={id}
+      className={
+        "grid grid-cols-1 gap-7 items-center py-9 min-[821px]:grid-cols-2 min-[821px]:gap-11 min-[821px]:py-[52px] " +
+        (first ? "" : "border-t border-(--lp-rail)")
+      }
+    >
+      <div className={reverse ? "min-[821px]:order-2" : ""}>
+        <span className="block font-mono text-[0.78rem] text-(--lp-accent) tracking-[0.04em] mb-3.5">{num}</span>
+        <h3 className={`${DISPLAY} text-[clamp(1.35rem,2.6vw,1.7rem)] font-[650] leading-[1.16] text-(--lp-ink-900)`}>
+          {title}
+        </h3>
+        <p className="mt-3.5 mb-0 text-base leading-[1.6] text-(--lp-ink-700) max-w-[46ch]">{body}</p>
+        <div className="flex flex-wrap gap-2 mt-[18px]">
+          {chips.map((c) => (
+            <span key={c} className={CHIP}>
+              {c}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div
+        data-glass
+        className={`${GLASS} p-[26px] min-h-[220px] flex flex-col justify-center ${reverse ? "min-[821px]:order-1" : ""}`}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+export default function LandingPage() {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [tampered, setTampered] = useState(false);
+
+  useEffect(() => {
+    const prevTitle = document.title;
+    document.title = "Kinga Sentinel — AI-assisted malaria tracking, forecasting & vaccine allocation";
+    return () => {
+      document.title = prevTitle;
+    };
+  }, []);
+
+  // Pointer-follow highlight on every [data-glass] panel — mirrors the
+  // published artifact's vanilla-JS version, adapted to a scoped effect + cleanup.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const glasses = root.querySelectorAll<HTMLElement>("[data-glass]");
+    const cleanups: Array<() => void> = [];
+    glasses.forEach((el) => {
+      const handler = (e: MouseEvent) => {
+        const r = el.getBoundingClientRect();
+        el.style.setProperty("--mx", `${((e.clientX - r.left) / r.width) * 100}%`);
+        el.style.setProperty("--my", `${((e.clientY - r.top) / r.height) * 100}%`);
+      };
+      el.addEventListener("mousemove", handler);
+      cleanups.push(() => el.removeEventListener("mousemove", handler));
+    });
+    return () => cleanups.forEach((fn) => fn());
+  }, []);
+
+  return (
+    <div
+      ref={rootRef}
+      data-testid="landing-page"
+      className={
+        // No background here: an in-flow background paints over the -z-10
+        // mesh layer below, which carries --lp-bg itself.
+        `${TOKENS} text-(--lp-ink-900) font-lp-body antialiased overflow-x-hidden ` +
+        "selection:bg-(--lp-accent) selection:text-(--lp-accent-ink)"
+      }
+    >
+      <div
+        aria-hidden="true"
+        className={
+          "fixed inset-0 -z-10 overflow-hidden bg-(--lp-bg) " +
+          "after:content-[''] after:absolute after:inset-0 after:opacity-90 " +
+          "after:bg-[radial-gradient(ellipse_at_50%_0%,transparent_0%,var(--lp-bg)_78%)]"
+        }
+      >
+        <div className="absolute rounded-full blur-[70px] will-change-transform size-[60vmax] -top-[20%] -left-[15%] opacity-55 bg-(--lp-mesh-a) animate-lp-drift1" />
+        <div className="absolute rounded-full blur-[70px] will-change-transform size-[50vmax] top-[10%] -right-[20%] opacity-55 bg-(--lp-mesh-b) animate-lp-drift2" />
+        <div className="absolute rounded-full blur-[70px] will-change-transform size-[45vmax] -bottom-[25%] left-[10%] opacity-[0.42] bg-(--lp-mesh-c) animate-lp-drift3" />
+        <div className="absolute rounded-full blur-[70px] will-change-transform size-[52vmax] -bottom-[15%] right-[5%] opacity-40 bg-(--lp-mesh-d) animate-lp-drift4" />
+        <div className="absolute rounded-full blur-[70px] will-change-transform size-[36vmax] top-[35%] left-[35%] opacity-30 bg-(--lp-mesh-e) animate-lp-drift5" />
+      </div>
+
+      <div className="sticky top-[env(safe-area-inset-top,0px)] z-50 pt-3.5">
+        <nav
+          data-glass
+          className={`${GLASS} rounded-[18px] max-w-[1180px] mx-auto flex items-center justify-between py-2.5 pr-3.5 pl-[18px]`}
+        >
+          <div className="flex items-center gap-2.5 font-lp-display font-bold text-[1.05rem] tracking-[-0.01em]">
+            <BrandMark gradientId="lp-g1" className="size-[30px] flex-none" />
+            Kinga Sentinel
+          </div>
+          <div className="hidden min-[761px]:flex items-center gap-7 text-[0.92rem] text-(--lp-ink-700)">
+            {[
+              ["#platform", "Platform"],
+              ["#how", "How it works"],
+              ["#capabilities", "Capabilities"],
+            ].map(([href, label]) => (
+              <a key={href} href={href} className="text-inherit no-underline transition-colors duration-200 hover:text-(--lp-accent)">
+                {label}
+              </a>
+            ))}
+          </div>
+          <Link
+            to="/dashboard"
+            className={
+              "font-lp-display text-[0.85rem] font-semibold bg-(--lp-accent) text-(--lp-accent-ink) px-[18px] py-[9px] " +
+              "rounded-full no-underline whitespace-nowrap shadow-[0_6px_18px_-4px_var(--lp-accent-soft)] " +
+              "transition-transform duration-200 hover:-translate-y-px"
+            }
+          >
+            See the platform
+          </Link>
+        </nav>
+      </div>
+
+      <main className="max-w-[1180px] mx-auto px-6">
+        {/* HERO */}
+        <section id="top" className="pt-14">
+          <div className="grid grid-cols-1 gap-9 items-start min-[901px]:grid-cols-[1.15fr_0.85fr]">
+            <div data-glass className={`${GLASS} px-[22px] pt-[30px] pb-7 min-[561px]:px-10 min-[561px]:pt-11 min-[561px]:pb-10`}>
+              <span
+                className={
+                  "inline-flex items-center gap-2 font-mono text-[0.72rem] tracking-[0.06em] uppercase " +
+                  "text-(--lp-accent) bg-(--lp-accent-soft) border border-(--lp-glass-border) px-3 py-[7px] rounded-full mb-[22px]"
+                }
+              >
+                <span className="size-1.5 rounded-full bg-(--lp-green) shadow-[0_0_0_3px_var(--lp-green-bg)]" />
+                Decision support for county &amp; national health teams
+              </span>
+              <h1 className={`${DISPLAY} text-[clamp(2.1rem,5.4vw,3.6rem)] leading-[1.03] font-[650] text-(--lp-ink-900)`}>
+                See the outbreak before it arrives.
+              </h1>
+              <p className="mt-5 mb-0 text-[1.1rem] leading-[1.55] text-(--lp-ink-700) max-w-[52ch]">
+                Kinga Sentinel links tamper-evident case reporting, rainfall-driven outbreak forecasting, and
+                vaccine allocation into one system that health officers can actually act on — in English or
+                Kiswahili, even on a weak connection.
+              </p>
+              <div className="flex gap-3.5 mt-[30px] flex-wrap">
+                <Link className={BTN_PRIMARY} to="/dashboard">
+                  Explore the platform
+                </Link>
+                <Link className={BTN_GHOST} to="/upload-simulate">
+                  Try the simulator
+                </Link>
+              </div>
+              <p className="mt-[26px] mb-0 text-[0.82rem] text-(--lp-ink-500) font-mono">
+                Built for Kisumu, Siaya, Homa Bay, Busia, Migori, Kisii, Nyamira, Kakamega, Vihiga, Bungoma, Kilifi,
+                Mombasa, Kwale &amp; Taita Taveta
+              </p>
+            </div>
+
+            <div data-glass className={`${GLASS} px-6 py-[26px]`}>
+              <div className="flex items-center justify-between mb-4">
+                <span className="font-lp-display font-[650] text-[0.98rem]">County risk snapshot</span>
+                <span className="font-mono text-[0.66rem] text-(--lp-ink-500) uppercase tracking-[0.05em]">Example</span>
+              </div>
+              {RISK_ROWS.map((r, i) => (
+                <div
+                  key={r.name}
+                  className={`flex items-center justify-between px-1 py-[11px] text-[0.92rem] ${i ? "border-t border-(--lp-rail)" : ""}`}
+                >
+                  <span className="font-medium">{r.name}</span>
+                  <Pill band={r.band}>{r.label}</Pill>
+                </div>
+              ))}
+              <p className={`${CAPTION} mt-3.5 mb-0`}>Illustrative example — not live output</p>
+            </div>
+          </div>
+        </section>
+
+        {/* STATS */}
+        <section className="pt-5 pb-14">
+          <div className="grid grid-cols-1 gap-3.5 min-[461px]:grid-cols-2 min-[901px]:grid-cols-5">
+            {STATS.map((s) => (
+              <div key={s.label} data-glass className={`${GLASS} px-[18px] py-5`}>
+                <div className="font-lp-display text-[1.7rem] font-bold text-(--lp-accent)">{s.num}</div>
+                <div className="mt-1 text-[0.82rem] text-(--lp-ink-500)">{s.label}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* FEATURES */}
+        <section id="platform">
+          <div className={SECTION_HEAD}>
+            <span className={KICKER}>The platform</span>
+            <h2 className={SECTION_H2}>Five tools, one line of sight from rainfall to response.</h2>
+            <p className={SECTION_P}>
+              Each part of Kinga Sentinel stands on its own, and each one feeds the next — a case report
+              becomes a forecast, a forecast becomes an allocation, an allocation becomes a plain-language
+              instruction someone can follow today.
+            </p>
+          </div>
+
+          <Feature
+            id="tamper"
+            first
+            num="01 · Case tracking"
+            title="A record no one can quietly edit."
+            body="Every case report from a facility is cryptographically linked to the one before it. Alter or delete an old entry and the chain visibly breaks — so data tampering is caught, not just trusted away."
+            chips={["Hash-chained records", "Facility-level reporting", "Tamper-evident, not tamper-proof theatre"]}
+          >
+            <div
+              className="flex items-center overflow-x-auto pb-1.5"
+              tabIndex={0}
+              role="region"
+              aria-label="Five linked case records, scrollable horizontally"
+            >
+              {CHAIN_DATA.map((block, i) => {
+                const broken = tampered && i >= 2;
+                return (
+                  <div key={block.id} className="flex items-center">
+                    <div
+                      className={
+                        "flex-none w-[108px] border rounded-[14px] px-2.5 pt-2.5 pb-[11px] " +
+                        "transition-[background-color,border-color,transform] duration-300 " +
+                        (broken
+                          ? "bg-(--lp-red-bg) border-(--lp-red) translate-y-0.5"
+                          : "bg-(--lp-glass-strong) border-(--lp-glass-border)")
+                      }
+                    >
+                      <div className="font-mono text-[0.62rem] text-(--lp-ink-400)">Case #{block.id}</div>
+                      <div className="font-mono text-[0.74rem] mt-[5px] text-(--lp-ink-900)">
+                        {tampered && i === 2 ? "9f1c…x??✗" : block.hash}
+                      </div>
+                      <div
+                        className={
+                          "font-mono text-[0.6rem] mt-[7px] flex items-center gap-[5px] " +
+                          "before:content-['●'] before:text-[0.5rem] " +
+                          (broken ? "text-(--lp-red)" : "text-(--lp-green)")
+                        }
+                      >
+                        {broken ? "mismatch" : "verified"}
+                      </div>
+                    </div>
+                    {i < CHAIN_DATA.length - 1 && (
+                      <div
+                        className={
+                          "flex-none w-[18px] h-0.5 transition-colors duration-300 " +
+                          (broken
+                            ? "bg-[repeating-linear-gradient(90deg,var(--lp-red)_0_5px,transparent_5px_9px)]"
+                            : "bg-(--lp-green)")
+                        }
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-3 mt-4 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setTampered((v) => !v)}
+                className={
+                  "font-lp-display font-semibold text-[0.82rem] px-4 py-[9px] rounded-full border border-(--lp-glass-border) " +
+                  "bg-(--lp-glass-strong) text-(--lp-ink-900) cursor-pointer transition-transform duration-150 " +
+                  "hover:-translate-y-px active:translate-y-0"
+                }
+              >
+                {tampered ? "Restore chain" : "Simulate tampering"}
+              </button>
+            </div>
+            <p
+              data-testid="chain-note"
+              aria-live="polite"
+              className="text-[0.82rem] text-(--lp-ink-500) mt-3 mb-0 min-h-[34px] leading-normal"
+            >
+              {tampered
+                ? "Case #003 was edited after the fact. Its fingerprint no longer matches — and neither does anything chained after it. That mismatch is how tampering gets caught."
+                : "Five linked case records. Each block's fingerprint depends on the one before it."}
+            </p>
+          </Feature>
+
+          <Feature
+            reverse
+            num="02 · Outbreak forecasting"
+            title="Rain today, risk weeks ahead."
+            body="An XGBoost model trained on real CHIRPS satellite rainfall data and county case history projects outbreak risk ahead of the peak — and every forecast is checked against a classical SEIR epidemiological model, not left to trust the AI on faith."
+            chips={["CHIRPS rainfall data", "XGBoost model", "Benchmarked vs. SEIR"]}
+          >
+            <svg className="block w-full h-auto" viewBox="0 0 320 140" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="lp-rainFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stopColor="#3E8EFF" stopOpacity="0.45" />
+                  <stop offset="1" stopColor="#3E8EFF" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <line x1="10" y1="108" x2="310" y2="108" stroke="var(--lp-rail)" strokeWidth="1" />
+              <path d="M10,90 Q40,40 70,55 T130,70 Q160,95 190,60 T250,50 Q280,80 310,95" fill="none" stroke="#3E8EFF" strokeWidth="2.4" />
+              <path
+                d="M10,90 Q40,40 70,55 T130,70 Q160,95 190,60 T250,50 Q280,80 310,95 L310,108 L10,108 Z"
+                fill="url(#lp-rainFill)"
+                stroke="none"
+              />
+              <path d="M10,100 Q50,96 80,85 T150,60 Q190,35 220,45 T310,50" fill="none" stroke="#FF7A59" strokeWidth="2.4" />
+              <circle cx="310" cy="50" r="4" fill="#FF7A59" />
+              <text x="10" y="126" fontFamily="JetBrains Mono, monospace" fontSize="8" fill="var(--lp-ink-400)">
+                Long rains (Mar–May)
+              </text>
+              <text x="190" y="126" fontFamily="JetBrains Mono, monospace" fontSize="8" fill="var(--lp-ink-400)">
+                Short rains (Oct–Dec)
+              </text>
+            </svg>
+            <p className="font-mono text-[0.68rem] text-(--lp-ink-400) mt-2.5 mb-0">
+              ● Rainfall trend &nbsp; ● Projected case risk — illustrative pattern, not live data
+            </p>
+          </Feature>
+
+          <Feature
+            num="03 · Vaccine allocation"
+            title="Doses to where they'll matter most."
+            body="A linear-programming solver takes a limited number of doses and the current risk picture across counties, then recommends a distribution that puts supply where outbreak risk is highest — not just where it was sent last time."
+            chips={["Linear programming", "Risk-weighted distribution", "County-level output"]}
+          >
+            {ALLOC_ROWS.map((row) => (
+              <div key={row.name} className="flex items-center gap-3 py-2">
+                <span className="w-[104px] flex-none text-[0.84rem] font-medium">{row.name}</span>
+                <div className="flex-1 h-2 rounded-full bg-(--lp-rail) overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-linear-to-r from-(--lp-mesh-d) to-(--lp-accent)"
+                    style={{ width: `${row.pct}%` }}
+                  />
+                </div>
+                <span className="w-[42px] flex-none text-right font-mono text-[0.74rem] text-(--lp-ink-500)">{row.tier}</span>
+              </div>
+            ))}
+            <p className={`${CAPTION} mt-3 mb-0`}>Illustrative example allocation, not a live run</p>
+          </Feature>
+
+          <Feature
+            reverse
+            num="04 · Decision support"
+            title="An answer, not a score to interpret."
+            body="Every county gets a plain-language, color-coded recommendation — red, amber, or green — that a non-analyst can act on immediately. Each one shows its reasoning in the open. No black-box number to take on trust."
+            chips={["Plain-language output", "Red / amber / green", "Reasoning shown, not hidden"]}
+          >
+            {DECISIONS.map((d) => (
+              <div
+                key={d.county}
+                className="rounded-2xl px-[15px] py-3.5 mb-2.5 last:mb-0 border border-(--lp-glass-border) bg-(--lp-glass-strong)"
+              >
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <span className="font-semibold text-[0.9rem] flex-1">{d.county}</span>
+                  <Pill band={d.band}>{d.label}</Pill>
+                </div>
+                <p className="m-0 text-[0.86rem] leading-normal text-(--lp-ink-700)">{d.text}</p>
+                <p className="font-mono text-[0.7rem] text-(--lp-ink-400) mt-[7px] mb-0">{d.why}</p>
+              </div>
+            ))}
+          </Feature>
+
+          <Feature
+            id="simulate"
+            num="05 · Bring-your-own-data simulation"
+            title="Your case counts, an outbreak curve in seconds."
+            body="Health workers can upload their own case-count CSV and get an instant SEIR-fitted outbreak projection back, with a short report and suggested next steps — no login, and nothing is stored afterward."
+            chips={["CSV upload", "SEIR-fitted projection", "No login, no data retained"]}
+          >
+            <div className="border-[1.5px] border-dashed border-(--lp-glass-border) rounded-2xl p-5 text-center bg-(--lp-glass-strong)">
+              <svg className="block size-[26px] mx-auto mb-2 text-(--lp-accent)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                <path d="M12 16V4M12 4L7 9M12 4l5 5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <div>Drop a case-count CSV</div>
+              <div className="font-mono text-[0.78rem] mt-1 text-(--lp-ink-500)">county_cases_weekly.csv &middot; 6.2 KB</div>
+            </div>
+            <div className="flex items-center gap-2.5 mt-3.5 pt-3.5 border-t border-(--lp-rail)">
+              <svg className="w-8 h-[22px] flex-none" viewBox="0 0 60 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M2,26 Q15,22 22,14 T40,6 Q50,4 58,8" stroke="#5B3DF6" strokeWidth="2.2" fill="none" />
+              </svg>
+              <span className="text-[0.8rem] text-(--lp-ink-700)">Projected outbreak curve + report, ready to download — example only</span>
+            </div>
+          </Feature>
+        </section>
+
+        {/* HOW IT WORKS */}
+        <section id="how">
+          <div className={SECTION_HEAD}>
+            <span className={KICKER}>How it works</span>
+            <h2 className={SECTION_H2}>From a facility report to a dose on the shelf.</h2>
+            <p className={SECTION_P}>One pipeline, four handoffs. Each step is visible to the next person in the chain.</p>
+          </div>
+          <div className="relative grid grid-cols-1 gap-[18px] min-[821px]:grid-cols-4">
+            <div className="hidden min-[821px]:block absolute top-[34px] left-[6%] right-[6%] h-px bg-linear-to-r from-transparent via-(--lp-rail) to-transparent" />
+            {FLOW_STEPS.map((step, i) => (
+              <div key={step.title} data-glass className={`${GLASS} px-5 py-6`}>
+                <div className="size-9 rounded-full bg-(--lp-accent) text-(--lp-accent-ink) font-lp-display font-bold text-[0.95rem] flex items-center justify-center mb-4">
+                  {i + 1}
+                </div>
+                <h3 className={`${DISPLAY} text-[1.02rem] font-[650] mb-2 text-(--lp-ink-900)`}>{step.title}</h3>
+                <p className="m-0 text-[0.87rem] text-(--lp-ink-700) leading-normal">{step.body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* CAPABILITIES */}
+        <section id="capabilities">
+          <div className={SECTION_HEAD}>
+            <span className={KICKER}>Also built in</span>
+            <h2 className={SECTION_H2}>Made for where the connection is weak and the stakes are real.</h2>
+          </div>
+          <div className="grid grid-cols-1 gap-3.5 min-[461px]:grid-cols-2 min-[821px]:grid-cols-4">
+            {[
+              {
+                title: "English & Kiswahili",
+                body: "The full interface, switchable, so it fits the team using it.",
+                icon: (
+                  <>
+                    <path d="M12 2a15 15 0 000 20 15 15 0 000-20z" strokeLinecap="round" />
+                    <path d="M2 12h20" strokeLinecap="round" />
+                  </>
+                ),
+              },
+              {
+                title: "Offline-ready",
+                body: "Installs as a PWA and keeps working through a weak or dropped connection.",
+                icon: (
+                  <>
+                    <path d="M12 20v-6M12 14a5 5 0 10-4.9-6H5a3 3 0 000 6h1" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M15.9 8a5 5 0 014.6 5" strokeLinecap="round" />
+                  </>
+                ),
+              },
+              {
+                title: "Live risk map",
+                body: "A county-level outbreak risk map of Kenya, kept current as reports come in.",
+                icon: (
+                  <>
+                    <path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2V6z" strokeLinejoin="round" />
+                    <path d="M9 4v14M15 6v14" strokeLinejoin="round" />
+                  </>
+                ),
+              },
+              {
+                title: "Full audit trail",
+                body: "Every forecast and allocation is logged with who generated it and when.",
+                icon: (
+                  <>
+                    <rect x="4" y="3" width="16" height="18" rx="2" />
+                    <path d="M8 8h8M8 12h8M8 16h5" strokeLinecap="round" />
+                  </>
+                ),
+              },
+            ].map((cap) => (
+              <div key={cap.title} data-glass className={`${GLASS} px-5 py-[22px]`}>
+                <svg className="block size-6 text-(--lp-accent) mb-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                  {cap.icon}
+                </svg>
+                <h3 className={`${DISPLAY} text-[0.95rem] font-[650] mb-1.5 text-(--lp-ink-900)`}>{cap.title}</h3>
+                <p className="m-0 text-[0.82rem] text-(--lp-ink-500) leading-normal">{cap.body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* CTA */}
+        <section id="cta">
+          <div data-glass className={`${GLASS} px-[22px] py-[38px] min-[561px]:px-11 min-[561px]:py-14 text-center`}>
+            <h2 className={`${DISPLAY} text-[clamp(1.8rem,4vw,2.6rem)] font-[650] max-w-[22ch] mx-auto text-(--lp-ink-900)`}>
+              Built for the counties carrying the heaviest burden.
+            </h2>
+            <p className="mt-4 mx-auto mb-0 max-w-[52ch] text-(--lp-ink-700) text-[1.02rem] leading-[1.55]">
+              Kinga Sentinel is a research prototype for AI-assisted malaria response — a real backend, a real
+              trained forecasting model, and real map data, built around what a county health team can actually use
+              during a rainy season.
+            </p>
+            <div className="flex gap-3.5 justify-center mt-7 flex-wrap">
+              <Link className={BTN_PRIMARY} to="/dashboard">
+                Explore the platform
+              </Link>
+              <Link className={BTN_GHOST} to="/chain-integrity">
+                Simulate a tampered record
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        <footer className="pt-10 pb-[60px]">
+          <div className="flex justify-between gap-6 flex-wrap items-start">
+            <div>
+              <div className="flex items-center gap-[9px] font-lp-display font-bold text-[0.95rem]">
+                <BrandMark gradientId="lp-g2" className="size-[22px]" />
+                Kinga Sentinel
+              </div>
+              <p className="max-w-[46ch] text-[0.82rem] text-(--lp-ink-500) leading-[1.6] mt-3 mb-0">
+                An undergraduate public-health research prototype exploring AI-assisted malaria tracking,
+                forecasting, and vaccine allocation for Kenya&apos;s lake-region and coastal counties. Not currently
+                deployed by any ministry or county health office.
+              </p>
+            </div>
+            <div className={`${CAPTION} text-left min-[601px]:text-right`}>
+              Case tracking &middot; Forecasting
+              <br />
+              Allocation &middot; Decision support
+              <br />
+              Simulation
+            </div>
+          </div>
+        </footer>
+      </main>
+    </div>
+  );
+}

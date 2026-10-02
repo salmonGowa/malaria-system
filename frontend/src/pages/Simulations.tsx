@@ -9,17 +9,22 @@ import {
   mlApi,
   SimulationResponse,
 } from "../api/client";
+import Card, { CARD_SUBTITLE_CLASS, CARD_TITLE_CLASS } from "../components/Card";
+import { KPI_HINT_CLASS, KPI_LABEL_CLASS, KPI_ROW_CLASS, KPI_VALUE_CLASS, kpiCardClass } from "../components/KpiCard";
 import LabeledSlider from "../components/LabeledSlider";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
+import { BANNER_WARNING_CLASS } from "../lib/bannerClasses";
 import { formatCompact, formatNumber } from "../lib/format";
 import { useLanguage } from "../lib/i18n";
+import { PLACEHOLDER_NOTE_CLASS } from "../lib/noteClasses";
+import { SIM_CONTROLS_CLASS, SIM_COUNTY_SLIDERS_CLASS, SIM_LAYOUT_CLASS, SIM_OUTPUT_CLASS } from "../lib/simClasses";
 
 export default function Simulations() {
   const { t } = useLanguage();
   return (
     <div>
       <h2>{t("page.simulations")}</h2>
-      <p className="placeholder-note">
+      <p className={PLACEHOLDER_NOTE_CLASS}>
         Both panels below call the ml_service directly and recompute live as you drag —
         nothing here is saved to the database.
       </p>
@@ -107,23 +112,23 @@ function AllocationSimulator() {
 
   if (loadError) {
     return (
-      <div className="card">
-        <h3>Vaccine allocation what-if</h3>
+      <Card>
+        <h3 className={CARD_TITLE_CLASS}>Vaccine allocation what-if</h3>
         <p style={{ color: "var(--risk-high)" }}>Could not load counties/forecasts: {loadError}</p>
-      </div>
+      </Card>
     );
   }
 
   return (
-    <div className="card">
-      <h3>Vaccine allocation what-if</h3>
-      <p className="card-subtitle">
+    <Card>
+      <h3 className={CARD_TITLE_CLASS}>Vaccine allocation what-if</h3>
+      <p className={CARD_SUBTITLE_CLASS}>
         Adjust total available doses and per-county risk to see how the real allocation
         optimiser (risk-weighted linear program, ml_service/app/allocation.py) redistributes doses.
       </p>
 
-      <div className="sim-layout">
-        <div className="sim-controls">
+      <div className={SIM_LAYOUT_CLASS}>
+        <div className={SIM_CONTROLS_CLASS}>
           <LabeledSlider
             label="Total available doses"
             value={totalDoses}
@@ -133,7 +138,7 @@ function AllocationSimulator() {
             step={1000}
             formatValue={formatNumber}
           />
-          <div className="sim-county-sliders">
+          <div className={SIM_COUNTY_SLIDERS_CLASS}>
             {counties.map((c) => (
               <LabeledSlider
                 key={c.id}
@@ -150,15 +155,15 @@ function AllocationSimulator() {
           </div>
         </div>
 
-        <div className="sim-output">
+        <div className={SIM_OUTPUT_CLASS}>
           {runError && <p style={{ color: "var(--risk-high)" }}>Simulation failed: {runError}</p>}
           {result && (
             <>
-              <div className="kpi-row">
-                <div className="kpi-card kpi-tone-neutral">
-                  <div className="kpi-label">Allocated</div>
-                  <div className="kpi-value">{formatNumber(result.total_allocated_doses)}</div>
-                  <div className="kpi-hint">of {formatNumber(result.total_available_doses)} available</div>
+              <div className={KPI_ROW_CLASS}>
+                <div className={kpiCardClass()}>
+                  <div className={KPI_LABEL_CLASS}>Allocated</div>
+                  <div className={KPI_VALUE_CLASS}>{formatNumber(result.total_allocated_doses)}</div>
+                  <div className={KPI_HINT_CLASS}>of {formatNumber(result.total_available_doses)} available</div>
                 </div>
               </div>
               <ResponsiveContainer width="100%" height={Math.max(220, chartData.length * 28)}>
@@ -174,7 +179,7 @@ function AllocationSimulator() {
           )}
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -214,15 +219,15 @@ function OutbreakSimulator() {
   }, [params]);
 
   return (
-    <div className="card">
-      <h3>Outbreak trajectory simulator</h3>
-      <p className="banner-warning">
+    <Card>
+      <h3 className={CARD_TITLE_CLASS}>Outbreak trajectory simulator</h3>
+      <p className={BANNER_WARNING_CLASS}>
         {result?.disclaimer ??
           "Illustrative generic SEIR model — not the trained, data-fitted forecasting model. For exploring intervention trade-offs only."}
       </p>
 
-      <div className="sim-layout">
-        <div className="sim-controls">
+      <div className={SIM_LAYOUT_CLASS}>
+        <div className={SIM_CONTROLS_CLASS}>
           <LabeledSlider
             label="Population at risk"
             value={population}
@@ -272,20 +277,20 @@ function OutbreakSimulator() {
           />
         </div>
 
-        <div className="sim-output">
+        <div className={SIM_OUTPUT_CLASS}>
           {error && <p style={{ color: "var(--risk-high)" }}>Simulation failed: {error}</p>}
           {result && (
             <>
-              <div className="kpi-row">
-                <div className="kpi-card kpi-tone-mid">
-                  <div className="kpi-label">Peak infectious</div>
-                  <div className="kpi-value">{formatCompact(result.peak_infectious)}</div>
-                  <div className="kpi-hint">week {result.peak_week}</div>
+              <div className={KPI_ROW_CLASS}>
+                <div className={kpiCardClass("mid")}>
+                  <div className={KPI_LABEL_CLASS}>Peak infectious</div>
+                  <div className={KPI_VALUE_CLASS}>{formatCompact(result.peak_infectious)}</div>
+                  <div className={KPI_HINT_CLASS}>week {result.peak_week}</div>
                 </div>
-                <div className="kpi-card kpi-tone-neutral">
-                  <div className="kpi-label">Projected total cases</div>
-                  <div className="kpi-value">{formatCompact(result.total_projected_cases)}</div>
-                  <div className="kpi-hint">over {horizonWeeks} weeks</div>
+                <div className={kpiCardClass()}>
+                  <div className={KPI_LABEL_CLASS}>Projected total cases</div>
+                  <div className={KPI_VALUE_CLASS}>{formatCompact(result.total_projected_cases)}</div>
+                  <div className={KPI_HINT_CLASS}>over {horizonWeeks} weeks</div>
                 </div>
               </div>
               <ResponsiveContainer width="100%" height={280}>
@@ -304,6 +309,6 @@ function OutbreakSimulator() {
           )}
         </div>
       </div>
-    </div>
+    </Card>
   );
 }

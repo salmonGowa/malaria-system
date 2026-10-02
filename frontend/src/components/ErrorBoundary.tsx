@@ -1,5 +1,8 @@
 import { Component, ErrorInfo, ReactNode } from "react";
 
+import Card, { CARD_SUBTITLE_CLASS, CARD_TITLE_CLASS } from "./Card";
+import { btnClass } from "../lib/buttonClasses";
+
 interface Props {
   children: ReactNode;
 }
@@ -28,18 +31,18 @@ export default class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.error) {
       return (
-        <div className="error-boundary">
-          <div className="card error-boundary-card">
-            <h3>Something went wrong</h3>
-            <p className="card-subtitle">
+        <div className="py-2">
+          <Card className="border-risk-high">
+            <h3 className={CARD_TITLE_CLASS}>Something went wrong</h3>
+            <p className={CARD_SUBTITLE_CLASS}>
               This page hit an unexpected error. Reloading usually fixes it — if it keeps happening, the detail
               below is worth including in a bug report.
             </p>
-            <pre className="error-boundary-detail">{this.state.error.message}</pre>
-            <button type="button" className="btn btn-primary" onClick={() => window.location.reload()}>
+            <pre className="bg-panel-muted border border-border rounded-lg py-2.5 px-3 text-xs text-text-secondary overflow-x-auto mb-3.5">{this.state.error.message}</pre>
+            <button type="button" className={btnClass("primary")} onClick={() => window.location.reload()}>
               Reload page
             </button>
-          </div>
+          </Card>
         </div>
       );
     }

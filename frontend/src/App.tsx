@@ -3,15 +3,18 @@ import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 
 // Lazy-loaded per route: each page becomes its own chunk instead of one
 // 800KB+ bundle (recharts + leaflet + every page paid for on first load
-// regardless of which one you actually opened). Dashboard is the one
-// exception — it's the landing page, so eagerly importing it avoids an
-// extra network round-trip + loading flash on the most common first paint.
-import Dashboard from "./pages/Dashboard";
+// regardless of which one you actually opened). LandingPage is the one
+// exception — it's what renders at "/" (see the early return below), so
+// eagerly importing it avoids an extra network round-trip + loading flash
+// on the most common first paint. Dashboard moved from "/" to "/dashboard"
+// and is lazy like everything else now that it's no longer the entry point.
+import LandingPage from "./pages/LandingPage";
 const Allocations = lazy(() => import("./pages/Allocations"));
 const CaseReports = lazy(() => import("./pages/CaseReports"));
 const ChainIntegrity = lazy(() => import("./pages/ChainIntegrity"));
 const Counties = lazy(() => import("./pages/Counties"));
 const CountyDetail = lazy(() => import("./pages/CountyDetail"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
 const DecisionSupport = lazy(() => import("./pages/DecisionSupport"));
 const Facilities = lazy(() => import("./pages/Facilities"));
 const Forecasts = lazy(() => import("./pages/Forecasts"));
@@ -44,6 +47,13 @@ import {
   XIcon,
 } from "./components/icons";
 import { TranslationKey, useLanguage } from "./lib/i18n";
+import { ROUTE_LOADING_CLASS } from "./lib/noteClasses";
+
+const NAV_LINK_BASE =
+  "flex items-center gap-2.5 text-text-secondary no-underline py-2.5 px-2.5 rounded-lg text-sm font-medium " +
+  "border-l-2 border-transparent transition duration-150 ease-in-out hover:bg-panel-muted hover:text-text " +
+  "[&_svg]:shrink-0 [&_svg]:opacity-85";
+const NAV_LINK_ACTIVE = "bg-accent-soft text-accent-text border-l-accent font-semibold [&_svg]:opacity-100";
 
 interface NavItem {
   to: string;
@@ -69,7 +79,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     labelKey: "nav.group.overview",
     items: [
-      { to: "/", labelKey: "nav.analytics", icon: AnalyticsIcon, end: true },
+      { to: "/dashboard", labelKey: "nav.analytics", icon: AnalyticsIcon, end: false },
       { to: "/decision-support", labelKey: "nav.decisionSupport", icon: CompassIcon, end: false },
       { to: "/simulations", labelKey: "nav.simulations", icon: SimulationIcon, end: false },
       { to: "/upload-simulate", labelKey: "nav.uploadSimulate", icon: UploadIcon, end: false },
@@ -125,42 +135,77 @@ export default function App() {
     };
   }, [navOpen]);
 
+  // The public landing page owns "/" entirely — its own nav, no sidebar or
+  // topbar chrome (see pages/LandingPage.tsx). Every other path gets the
+  // authenticated app shell below, with Dashboard now living at
+  // "/dashboard" instead of "/".
+  if (location.pathname === "/") {
+    return <LandingPage />;
+  }
+
   const activeItem = ALL_NAV_ITEMS.find((item) =>
     item.end ? location.pathname === item.to : location.pathname.startsWith(item.to),
   );
 
   return (
-    <div className={navOpen ? "app-shell nav-open" : "app-shell"}>
-      <a href="#main-content" className="skip-link">
+    <div className="flex min-h-screen">
+      <a
+        href="#main-content"
+        className="absolute -top-full left-3 z-[100] bg-accent text-white py-2.5 px-4 rounded-lg font-semibold text-sm no-underline focus-visible:top-3"
+      >
         {t("skipLink")}
       </a>
       <button
         type="button"
-        className="nav-scrim"
+        className={[
+          "hidden max-[900px]:block fixed inset-0 z-40 bg-[rgba(8,12,18,0.55)] border-none p-0 transition-opacity duration-200 ease-in-out",
+          navOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
+        ].join(" ")}
         aria-hidden={!navOpen}
         tabIndex={-1}
         onClick={() => setNavOpen(false)}
       />
 
-      <nav className="sidebar" aria-label="Primary">
-        <div className="sidebar-brand">
-          <span className="sidebar-brand-mark" aria-hidden="true">
+      <nav
+        className={[
+          "w-62 shrink-0 bg-panel border-r border-border py-5 px-3.5 flex flex-col gap-2 overflow-y-auto",
+          "max-[900px]:fixed max-[900px]:inset-y-0 max-[900px]:left-0 max-[900px]:w-[min(280px,82vw)] max-[900px]:z-50",
+          "max-[900px]:shadow-[var(--shadow-lg)] max-[900px]:transition-transform max-[900px]:duration-[250ms] max-[900px]:ease-[var(--ease)]",
+          navOpen ? "max-[900px]:translate-x-0" : "max-[900px]:-translate-x-full",
+        ].join(" ")}
+        aria-label="Primary"
+      >
+        <div className="flex items-center gap-2.5 pt-1 px-1.5">
+          <span
+            className="grid place-items-center w-8 h-8 rounded-[9px] bg-accent-soft text-accent-text font-bold text-[15px] shrink-0"
+            aria-hidden="true"
+          >
             M
           </span>
-          <div className="sidebar-brand-text">
-            <h1>{t("app.title")}</h1>
-            <p className="sidebar-tagline">{t("app.tagline")}</p>
+          <div className="min-w-0">
+            <h1 className="text-[0.9375rem] font-bold text-text m-0 whitespace-nowrap overflow-hidden text-ellipsis">{t("app.title")}</h1>
+            <p className="mt-px mr-0 mb-0 ml-0 text-xs text-muted">{t("app.tagline")}</p>
           </div>
-          <button type="button" className="nav-close" onClick={() => setNavOpen(false)} aria-label="Close menu">
+          <button
+            type="button"
+            className="hidden max-[900px]:inline-flex ml-auto bg-transparent border-none text-muted p-1.5 rounded-lg cursor-pointer hover:bg-panel-muted hover:text-text"
+            onClick={() => setNavOpen(false)}
+            aria-label="Close menu"
+          >
             <XIcon size={18} />
           </button>
         </div>
-        {NAV_GROUPS.map((group) => (
-          <div className="sidebar-group" key={group.labelKey}>
-            <p className="sidebar-group-label">{t(group.labelKey)}</p>
-            <div className="sidebar-links">
+        {NAV_GROUPS.map((group, index) => (
+          <div className={index === 0 ? "mt-1.5" : "mt-4"} key={group.labelKey}>
+            <p className="m-0 mb-1.5 ml-2.5 text-[0.6875rem] font-bold tracking-[0.06em] uppercase text-muted">{t(group.labelKey)}</p>
+            <div className="flex flex-col gap-0.5">
               {group.items.map(({ to, labelKey, icon: Icon, end }) => (
-                <NavLink key={to} to={to} end={end} className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}>
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={end}
+                  className={({ isActive }) => `${NAV_LINK_BASE} ${isActive ? NAV_LINK_ACTIVE : ""}`}
+                >
                   <Icon size={18} />
                   <span>{t(labelKey)}</span>
                 </NavLink>
@@ -170,25 +215,36 @@ export default function App() {
         ))}
       </nav>
 
-      <div className="app-main">
+      <div className="flex-1 min-w-0 flex flex-col">
         <OfflineBanner />
-        <header className="topbar">
-          <button type="button" className="nav-toggle" onClick={() => setNavOpen(true)} aria-label="Open menu">
+        <header className="sticky top-0 z-30 flex items-center gap-3 h-14 px-5 border-b border-border bg-[color-mix(in_srgb,var(--panel)_90%,transparent)] backdrop-blur-[8px] backdrop-saturate-[1.4]">
+          <button
+            type="button"
+            className="hidden max-[900px]:inline-flex items-center justify-center bg-transparent border-none text-text p-1.5 -m-1.5 rounded-lg cursor-pointer hover:bg-panel-muted"
+            onClick={() => setNavOpen(true)}
+            aria-label="Open menu"
+          >
             <MenuIcon size={20} />
           </button>
-          <span className="topbar-title">{activeItem ? t(activeItem.labelKey) : t("app.title")}</span>
-          <div className="topbar-spacer" />
+          <span className="hidden max-[900px]:block font-semibold text-[0.9375rem]">
+            {activeItem ? t(activeItem.labelKey) : t("app.title")}
+          </span>
+          <div className="flex-1" />
           <AuthWidget />
           <LanguageToggle />
           <ThemeToggle />
         </header>
-        <main className="content" id="main-content" tabIndex={-1}>
+        <main
+          className="flex-1 pt-7 px-8 pb-12 max-[900px]:pt-5 max-[900px]:px-4.5 max-[900px]:pb-10 max-[480px]:pt-4 max-[480px]:px-3.5 max-[480px]:pb-9"
+          id="main-content"
+          tabIndex={-1}
+        >
           {/* Keyed by path so navigating away from a crashed page remounts
               a fresh boundary rather than staying stuck in the error state. */}
           <ErrorBoundary key={location.pathname}>
-            <Suspense fallback={<div className="route-loading placeholder-note">Loading…</div>}>
+            <Suspense fallback={<div className={ROUTE_LOADING_CLASS}>Loading…</div>}>
               <Routes>
-                <Route path="/" element={<Dashboard />} />
+                <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/decision-support" element={<DecisionSupport />} />
                 <Route path="/simulations" element={<Simulations />} />
                 <Route path="/upload-simulate" element={<UploadSimulate />} />

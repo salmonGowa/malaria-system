@@ -12,6 +12,7 @@ import { expect, test } from "@playwright/test";
  * scrollable table, and a heading-level skip — all through this same tool. */
 const ROUTES = [
   "/",
+  "/dashboard",
   "/decision-support",
   "/simulations",
   "/upload-simulate",

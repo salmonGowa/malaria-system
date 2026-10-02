@@ -35,11 +35,18 @@
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      Inter/JetBrains Mono: the dashboard's own typography (src/index.css).
+      Bricolage Grotesque/Literata: the landing page's typography
+      (pages/LandingPage.tsx) — loaded globally here (not injected by that
+      component) so it's a normal <head> stylesheet like the rest, not a
+      runtime DOM insertion.
+    -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Literata:ital,opsz,wght@0,18..144,300..700;1,18..144,400&display=swap"
       rel="stylesheet"
     />
-    <title>Malaria Tracking &amp; Forecasting Dashboard</title>
+    <title>Malaria Simulation Tracking &amp; Forecasting Dashboard</title>
   </head>
   <body>
     <div id="root"></div>

@@ -1,10 +1,15 @@
 import { FormEvent, useEffect, useState } from "react";
 
+import Card from "../components/Card";
 import { AlertIcon, UserIcon } from "../components/icons";
 import { useAuth } from "../lib/auth";
+import { FORM_BANNER_ERROR_CLASS, FORM_BANNER_SUCCESS_CLASS } from "../lib/bannerClasses";
+import { btnClass } from "../lib/buttonClasses";
+import { FIELD_CLASS, FIELD_HINT_CLASS, FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "../lib/fieldClasses";
+import { useLanguage } from "../lib/i18n";
+import { PLACEHOLDER_NOTE_CLASS } from "../lib/noteClasses";
 import { DecisionThresholds, DEFAULT_THRESHOLDS, resetThresholds, saveThresholds } from "../lib/settings";
 import { useThresholds } from "../lib/useThresholds";
-import { useLanguage } from "../lib/i18n";
 
 interface FieldSpec {
   key: keyof DecisionThresholds;
@@ -109,30 +114,31 @@ export default function Settings() {
   return (
     <div>
       <h2>{t("page.settings")}</h2>
-      <p className="placeholder-note">
+      <p className={PLACEHOLDER_NOTE_CLASS}>
         These cutoffs turn raw forecast/allocation numbers into the red/amber/green risk colors and "stale" /
         "under-covered" / "trending" labels used across the app (see lib/recommendations.ts and lib/format.ts's{" "}
         <code className="mono">riskBand</code>) — not model parameters, just where the line is drawn for "this
         needs attention". Saved to this browser only (see lib/settings.ts).
       </p>
 
-      <div className="card">
+      <Card>
         {!username && (
-          <p className="form-banner-error">
+          <p className={FORM_BANNER_ERROR_CLASS}>
             <UserIcon size={14} /> Sign in (top right) to change these — everyone can see the current values below.
           </p>
         )}
 
         <form onSubmit={handleSubmit}>
-          <div className="settings-fields">
+          <div className="flex flex-col gap-4.5 max-w-[480px]">
             {FIELDS.map((f) => (
-              <label className="field" key={f.key}>
-                <span className="field-label">
+              <label className={FIELD_CLASS} key={f.key}>
+                <span className={FIELD_LABEL_CLASS}>
                   {f.label}
                   {f.suffix ? ` (${f.suffix})` : ""}
                 </span>
                 <input
                   type="number"
+                  className={FIELD_INPUT_CLASS}
                   min={f.min}
                   max={f.max}
                   step={f.step}
@@ -140,28 +146,28 @@ export default function Settings() {
                   onChange={(e) => handleChange(f.key, Number(e.target.value))}
                   disabled={!username}
                 />
-                <span className="field-hint">{f.hint}</span>
+                <span className={`${FIELD_HINT_CLASS} mt-0.5`}>{f.hint}</span>
               </label>
             ))}
           </div>
 
           {error && (
-            <p className="form-banner-error">
+            <p className={FORM_BANNER_ERROR_CLASS}>
               <AlertIcon size={14} /> {error}
             </p>
           )}
-          {saved && !isDirty && <p className="form-banner-success">Saved — applied across the app immediately.</p>}
+          {saved && !isDirty && <p className={FORM_BANNER_SUCCESS_CLASS}>Saved — applied across the app immediately.</p>}
 
-          <div className="settings-actions">
-            <button type="submit" className="btn btn-primary" disabled={!username || !isDirty}>
+          <div className="flex gap-2.5 mt-4.5">
+            <button type="submit" className={btnClass("primary")} disabled={!username || !isDirty}>
               {t("common.save")}
             </button>
-            <button type="button" className="btn btn-secondary" onClick={handleReset} disabled={!username}>
+            <button type="button" className={btnClass("secondary")} onClick={handleReset} disabled={!username}>
               {t("common.resetToDefaults")}
             </button>
           </div>
         </form>
-      </div>
+      </Card>
     </div>
   );
 }

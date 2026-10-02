@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Load real county boundary geometry from GADM into existing County rows.
 
 The scaffold seeds County.boundary with placeholder rectangles (see

@@ -6,6 +6,12 @@ interface CountyPickerProps {
   onChange: (selected: Set<number>) => void;
 }
 
+/** Was `.county-picker-item` — also used standalone by Counties.tsx's own
+ * "endemic focus" checkbox, which isn't inside a CountyPicker. */
+export const COUNTY_PICKER_ITEM_CLASS = "flex items-center gap-1.5 text-[0.8125rem] text-text-secondary cursor-pointer";
+
+const CHECKBOX_CLASS = "accent-accent w-[15px] h-[15px] shrink-0 cursor-pointer";
+
 export default function CountyPicker({ counties, selected, onChange }: CountyPickerProps) {
   const allSelected = counties.length > 0 && selected.size === counties.length;
 
@@ -24,10 +30,11 @@ export default function CountyPicker({ counties, selected, onChange }: CountyPic
   };
 
   return (
-    <div className="county-picker">
-      <label className="county-picker-all">
+    <div className="border border-border rounded-lg py-2.5 px-3 bg-panel-muted mb-3" data-testid="county-picker">
+      <label className="flex items-center gap-2 font-semibold text-[0.8125rem] pb-2 mb-2 border-b border-border cursor-pointer">
         <input
           type="checkbox"
+          className={CHECKBOX_CLASS}
           checked={allSelected}
           ref={(el) => {
             if (el) el.indeterminate = selected.size > 0 && !allSelected;
@@ -38,10 +45,10 @@ export default function CountyPicker({ counties, selected, onChange }: CountyPic
           All counties ({selected.size}/{counties.length})
         </span>
       </label>
-      <div className="county-picker-list">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-x-2.5 gap-y-1.5 max-h-40 overflow-y-auto">
         {counties.map((c) => (
-          <label key={c.id} className="county-picker-item">
-            <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} />
+          <label key={c.id} className={COUNTY_PICKER_ITEM_CLASS}>
+            <input type="checkbox" className={CHECKBOX_CLASS} checked={selected.has(c.id)} onChange={() => toggle(c.id)} />
             <span>{c.name}</span>
           </label>
         ))}
