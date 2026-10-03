@@ -2,7 +2,8 @@
  * first. A scheduling heuristic, not an optimisation: the optimiser decides
  * *how many* doses each county gets; this only orders shipments so the
  * riskiest counties are fully supplied soonest. A county whose doses don't
- * fit in one batch spills over into the next. */
+ * fit in one batch spills over into the next (unless only a sliver is left,
+ * which ships with the rest). */
 export interface BatchInput {
   code: string;
   name: string;
@@ -15,6 +16,8 @@ export interface Batch {
   items: { code: string; name: string; doses: number }[];
   total: number;
 }
+
+const SLIVER = 0.05;
 
 export function deliveryBatches(allocations: BatchInput[], batchCount: number): Batch[] {
   const funded = allocations.filter((a) => a.doses > 0).sort((a, b) => b.risk - a.risk || b.doses - a.doses);
@@ -29,7 +32,10 @@ export function deliveryBatches(allocations: BatchInput[], batchCount: number): 
     let left = a.doses;
     while (left > 0) {
       const batch = batches[b];
-      const take = b === count - 1 ? left : Math.min(left, size - batch.total);
+      const room = size - batch.total;
+      // Don't strand a sliver (under 5% of a batch) of a county in the next
+      // batch — ship it now, letting this batch run slightly over.
+      const take = b === count - 1 || left - room < size * SLIVER ? left : Math.min(left, room);
       if (take > 0) {
         batch.items.push({ code: a.code, name: a.name, doses: take });
         batch.total += take;

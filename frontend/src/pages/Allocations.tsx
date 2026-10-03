@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 
 import { api, VaccineAllocation } from "../api/client";
 import Card from "../components/Card";
-import Pagination from "../components/Pagination";
 import { DownloadIcon, SparkleIcon } from "../components/icons";
 import { RunLines, runSummary } from "../components/AllocationRunLines";
 import { AllocationRun, groupAllocationRuns } from "../lib/allocationRuns";
@@ -17,7 +16,6 @@ import { isTestRun, readHideTestRuns, writeHideTestRuns } from "../lib/testRuns"
 
 const HIDE_TEST_KEY = "malaria-system:allocations-hide-test-runs";
 const EARLIER_PAGE = 10;
-const LOG_PAGE = 25;
 
 function RunMeta({ run }: { run: AllocationRun }) {
   return (
@@ -34,7 +32,6 @@ export default function Allocations() {
   const [loading, setLoading] = useState(true);
   const [hideTestRuns, setHideTestRuns] = useState(() => readHideTestRuns(HIDE_TEST_KEY));
   const [shown, setShown] = useState(EARLIER_PAGE);
-  const [logPage, setLogPage] = useState(1);
 
   useEffect(() => {
     api
@@ -53,17 +50,10 @@ export default function Allocations() {
   const latest = runs[0] ?? null;
   const earlier = runs.slice(1);
   const latestSummary = latest ? runSummary(latest) : null;
-  // Every line, newest first — the audit view (and what e2e/core-flows reads
-  // as this page's first table row after a run).
-  const logRows = useMemo(
-    () => [...visibleRows].sort((a, b) => new Date(b.generated_at).getTime() - new Date(a.generated_at).getTime()),
-    [visibleRows],
-  );
 
   const toggleHide = (hide: boolean) => {
     setHideTestRuns(hide);
     setShown(EARLIER_PAGE);
-    setLogPage(1);
     writeHideTestRuns(HIDE_TEST_KEY, hide);
   };
 
@@ -118,6 +108,9 @@ export default function Allocations() {
                 Hide test runs
               </label>
             )}
+            <Link className="text-[0.8125rem] font-semibold" to="/allocation-log">
+              Allocation log →
+            </Link>
             {visibleRows.length > 0 && (
               <button type="button" className={btnClass("secondary", { sm: true })} onClick={handleExport}>
                 <DownloadIcon size={14} /> {t("common.exportCsv")}
@@ -231,39 +224,6 @@ export default function Allocations() {
         </Card>
       )}
 
-      {logRows.length > 0 && (
-        <Card>
-          <h3 className="m-0 mb-1 text-[0.95rem] font-semibold text-text">Allocation log</h3>
-          <p className="mt-0 mb-3 text-[0.8125rem] text-muted">Every county line from every run, newest first, with who triggered it.</p>
-          <div className="relative overflow-x-auto" tabIndex={0} role="region" aria-label="Allocation log, scrollable horizontally">
-            <table>
-              <thead>
-                <tr>
-                  <th>{t("table.county")}</th>
-                  <th className="text-right">{t("table.recommendedDoses")}</th>
-                  <th>{t("table.period")}</th>
-                  <th>Generated</th>
-                  <th>{t("table.triggeredBy")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logRows.slice((logPage - 1) * LOG_PAGE, logPage * LOG_PAGE).map((a) => (
-                  <tr key={a.id} title={a.rationale}>
-                    <td className="font-semibold">{a.county_name}</td>
-                    <td className={`text-right tabular-nums ${a.recommended_doses === 0 ? "text-muted" : ""}`}>{formatNumber(a.recommended_doses)}</td>
-                    <td className="whitespace-nowrap">{formatPeriod(a.period_start, a.period_end)}</td>
-                    <td className="whitespace-nowrap text-muted" title={new Date(a.generated_at).toLocaleString()}>
-                      {formatRelativeTime(a.generated_at)}
-                    </td>
-                    <td className="text-text-secondary">{a.generated_by_username ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <Pagination page={logPage} pageSize={LOG_PAGE} count={logRows.length} onPageChange={setLogPage} />
-        </Card>
-      )}
     </div>
   );
 }

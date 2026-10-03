@@ -32,4 +32,30 @@ describe("deliveryBatches", () => {
     expect(one).toHaveLength(1);
     expect(one[0].items.map((i) => i.code)).toEqual(["HIGH", "MID", "LOW"]);
   });
+
+  it("ships a county's last sliver with the rest instead of stranding it", () => {
+    const batches = deliveryBatches(
+      [
+        { code: "A", name: "A", doses: 1000, risk: 0.9 },
+        { code: "B", name: "B", doses: 1010, risk: 0.5 },
+      ],
+      2,
+    );
+    expect(batches[0].items).toEqual([
+      { code: "A", name: "A", doses: 1000 },
+      { code: "B", name: "B", doses: 5 },
+    ]);
+    // 1010 - 5 left; B's remainder (1005) is far more than a sliver, so it moves on.
+    expect(batches[1].items).toEqual([{ code: "B", name: "B", doses: 1005 }]);
+
+    const sliver = deliveryBatches(
+      [
+        { code: "A", name: "A", doses: 1003, risk: 0.9 },
+        { code: "B", name: "B", doses: 1000, risk: 0.5 },
+      ],
+      2,
+    );
+    expect(sliver[0].items).toEqual([{ code: "A", name: "A", doses: 1003 }]);
+    expect(sliver[1].items).toEqual([{ code: "B", name: "B", doses: 1000 }]);
+  });
 });

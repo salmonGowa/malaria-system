@@ -4,6 +4,7 @@ import { api, County, CountyReadiness } from "../api/client";
 import Card from "./Card";
 import CountyShape from "./CountyShape";
 import { AlertIcon, MapPinIcon } from "./icons";
+import { SMALLEST_COUNTY } from "../lib/allocationChecks";
 import { BANNER_WARNING_CLASS, FORM_BANNER_ERROR_CLASS } from "../lib/bannerClasses";
 import { btnClass } from "../lib/buttonClasses";
 import { FIELD_HINT_CLASS, FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "../lib/fieldClasses";
@@ -13,9 +14,6 @@ import { ROUTE_LOADING_CLASS } from "../lib/noteClasses";
 const BoundaryLocator = lazy(() => import("./BoundaryLocator"));
 
 const CODE_FORMAT = /^KEN-\d{3}$/;
-// Kenya's smallest county (Lamu) has ~140k people; anything far below that
-// is far more likely a typo (a dropped digit) than a real county.
-const SMALLEST_COUNTY = 140_000;
 
 interface Props {
   county: County;

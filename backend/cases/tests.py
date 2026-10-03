@@ -478,6 +478,24 @@ class AllocationGenerationServiceTests(TestCase):
         self.assertEqual(by_county[self.county_a].based_on_forecast, self.forecast_a)
         self.assertEqual(by_county[self.county_b].based_on_forecast, self.forecast_b)
 
+    @patch("cases.services.allocation_generation_service.requests.post")
+    def test_generate_sends_the_minimum_per_county(self, mock_post):
+        mock_post.return_value = _mock_response(
+            200, {"total_available_doses": 10000, "total_allocated_doses": 0, "allocations": []}
+        )
+        AllocationGenerationService().generate(
+            [self.county_a, self.county_b], 10000, date(2026, 5, 1), date(2026, 5, 28), min_doses_per_county=500
+        )
+        self.assertEqual(mock_post.call_args.kwargs["json"]["min_doses_per_county"], 500)
+
+    @patch("cases.services.allocation_generation_service.requests.post")
+    def test_a_rejected_minimum_surfaces_ml_services_explanation(self, mock_post):
+        mock_post.return_value = _mock_response(422, {"detail": "A floor of 9000 doses per county needs 18000 doses."})
+        with self.assertRaisesMessage(AllocationGenerationError, "A floor of 9000 doses per county needs 18000 doses."):
+            AllocationGenerationService().generate(
+                [self.county_a, self.county_b], 10000, date(2026, 5, 1), date(2026, 5, 28), min_doses_per_county=9000
+            )
+
     def test_raises_when_no_forecasts_exist(self):
         county_c = County.objects.create(name="Busia", code="KEN-040", population=200_000)
         with self.assertRaises(AllocationGenerationError):

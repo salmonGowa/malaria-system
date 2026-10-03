@@ -23,6 +23,7 @@ const ROUTES = [
   "/generate-forecast",
   "/allocations",
   "/run-allocation",
+  "/allocation-log",
   "/facilities",
   "/chain-integrity",
   "/settings",

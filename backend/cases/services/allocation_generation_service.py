@@ -32,6 +32,7 @@ class AllocationGenerationService:
         period_start,
         period_end,
         max_share_per_county=1.0,
+        min_doses_per_county=0,
         generated_by=None,
     ):
         forecasts = self._latest_forecasts(counties)
@@ -43,6 +44,7 @@ class AllocationGenerationService:
         payload = {
             "total_available_doses": total_available_doses,
             "max_share_per_county": max_share_per_county,
+            "min_doses_per_county": min_doses_per_county,
             "county_forecasts": [
                 {
                     "county_code": county.code,
@@ -63,6 +65,15 @@ class AllocationGenerationService:
         except requests.RequestException as exc:
             raise AllocationGenerationError(f"Could not reach ml_service: {exc}") from exc
 
+        if response.status_code == 422:
+            # A settings problem the user can fix (e.g. a minimum per county the
+            # supply can't cover) — pass ml_service's explanation through as-is.
+            try:
+                detail = response.json().get("detail")
+            except ValueError:
+                detail = None
+            if isinstance(detail, str):
+                raise AllocationGenerationError(detail)
         if response.status_code >= 400:
             raise AllocationGenerationError(f"ml_service returned {response.status_code}: {response.text}")
 

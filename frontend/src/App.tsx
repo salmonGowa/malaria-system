@@ -10,6 +10,7 @@ import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 // and is lazy like everything else now that it's no longer the entry point.
 import LandingPage from "./pages/LandingPage";
 const Allocations = lazy(() => import("./pages/Allocations"));
+const AllocationLog = lazy(() => import("./pages/AllocationLog"));
 const CaseReports = lazy(() => import("./pages/CaseReports"));
 const ChainIntegrity = lazy(() => import("./pages/ChainIntegrity"));
 const Counties = lazy(() => import("./pages/Counties"));
@@ -31,6 +32,7 @@ import OfflineBanner from "./components/OfflineBanner";
 import ThemeToggle from "./components/ThemeToggle";
 import {
   AllocationIcon,
+  LogIcon,
   AnalyticsIcon,
   CaseReportIcon,
   CompassIcon,
@@ -105,6 +107,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: "/allocations", labelKey: "nav.vaccineAllocation", icon: AllocationIcon, end: false },
       { to: "/run-allocation", labelKey: "nav.runAllocation", icon: SparkleIcon, end: false },
+      { to: "/allocation-log", labelKey: "nav.allocationLog", icon: LogIcon, end: false },
     ],
   },
   {
@@ -255,6 +258,7 @@ export default function App() {
                 <Route path="/forecasts" element={<Forecasts />} />
                 <Route path="/generate-forecast" element={<GenerateForecast />} />
                 <Route path="/allocations" element={<Allocations />} />
+                <Route path="/allocation-log" element={<AllocationLog />} />
                 <Route path="/run-allocation" element={<RunAllocation />} />
                 <Route path="/facilities" element={<Facilities />} />
                 <Route path="/settings" element={<Settings />} />

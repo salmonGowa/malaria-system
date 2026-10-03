@@ -45,11 +45,13 @@ test.describe.serial("core flows", () => {
     await page.goto("/run-allocation");
     await selectOnlyCounty(page, "Kisumu");
     await page.getByRole("button", { name: "Run allocation" }).click();
+    // Saving takes a deliberate second click in the review dialog.
+    await page.getByRole("dialog", { name: "Save this allocation?" }).getByRole("button", { name: "Confirm and save" }).click();
 
     // Real ml_service call (PuLP linear program).
     await expect(page.getByText(/Allocated [\d,]+ doses across 1 county/)).toBeVisible({ timeout: 15_000 });
 
-    await page.goto("/allocations");
+    await page.goto("/allocation-log");
     const firstRow = page.locator("tbody tr").first();
     await expect(firstRow).toContainText("Kisumu");
     await expect(firstRow).toContainText(E2E_USERNAME);

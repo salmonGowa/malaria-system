@@ -255,6 +255,7 @@ export interface GenerateAllocationsRequest {
   period_start?: string;
   period_end?: string;
   max_share_per_county?: number;
+  min_doses_per_county?: number;
 }
 
 export interface NewCounty {

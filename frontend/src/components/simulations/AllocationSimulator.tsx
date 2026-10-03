@@ -404,16 +404,19 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 // vaccine and with (doses / population x efficacy) protected from week 0 —
 // started from the county's own cases and rainfall where it has them.
 
-function ImpactPanel({
+/** Also used by Run Allocation (`embedded`: no card of its own). */
+export function ImpactPanel({
   counties,
   dosesByCode,
   allocating,
   onOpenOutbreak,
+  embedded = false,
 }: {
   counties: County[];
   dosesByCode: Map<string, number>;
   allocating: boolean;
   onOpenOutbreak: (params: OutbreakParams) => void;
+  embedded?: boolean;
 }) {
   const st = useSimText();
   const [efficacy, setEfficacy] = useState(0.4);
@@ -497,8 +500,9 @@ function ImpactPanel({
   const busy = pending || allocating || debounced !== settings;
   const missingData = rows.filter((r) => !r.impact.hasCaseData).length;
 
+  const Wrapper = embedded ? "div" : Card;
   return (
-    <Card>
+    <Wrapper>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="m-0 text-[0.95rem] font-semibold text-text">{st("impact.title")}</h3>
@@ -617,24 +621,42 @@ function ImpactPanel({
           </p>
         </>
       )}
-    </Card>
+    </Wrapper>
   );
 }
 
 // --- Delivery schedule -----------------------------------------------------
 
-function DeliveryPanel({
+export interface DeliveryPlan {
+  batches: string; // "1".."4"
+  interval: string; // weeks between batches: "1" | "2" | "4"
+}
+
+/** Also used by Run Allocation, which controls the plan (`plan`/`onPlanChange`)
+ * so it can go into the CSV and printed summary. */
+export function DeliveryPanel({
   counties,
   dosesByCode,
   risk,
+  embedded = false,
+  plan,
+  onPlanChange,
 }: {
   counties: County[];
   dosesByCode: Map<string, number>;
   risk: Record<number, number>;
+  embedded?: boolean;
+  plan?: DeliveryPlan;
+  onPlanChange?: (plan: DeliveryPlan) => void;
 }) {
   const st = useSimText();
-  const [batchCount, setBatchCount] = useState("3");
-  const [interval, setIntervalWeeks] = useState("2");
+  const [ownPlan, setOwnPlan] = useState<DeliveryPlan>({ batches: "3", interval: "2" });
+  const current = plan ?? ownPlan;
+  const update = (next: DeliveryPlan) => (onPlanChange ? onPlanChange(next) : setOwnPlan(next));
+  const batchCount = current.batches;
+  const interval = current.interval;
+  const setBatchCount = (batches: string) => update({ ...current, batches });
+  const setIntervalWeeks = (weeks: string) => update({ ...current, interval: weeks });
 
   const batches = useMemo(
     () =>
@@ -653,8 +675,9 @@ function DeliveryPanel({
   );
   const weekOf = (index: number) => index * Number(interval);
 
+  const Wrapper = embedded ? "div" : Card;
   return (
-    <Card>
+    <Wrapper>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h3 className="m-0 text-[0.95rem] font-semibold text-text">{st("delivery.title")}</h3>
@@ -715,6 +738,6 @@ function DeliveryPanel({
         ))}
       </ol>
       <p className="mt-3 mb-0 text-xs text-muted">{st("delivery.footnote")}</p>
-    </Card>
+    </Wrapper>
   );
 }
