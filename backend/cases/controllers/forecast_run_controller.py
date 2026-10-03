@@ -9,8 +9,9 @@ from .base import ReadOnlyController
 class ForecastRunController(ReadOnlyController):
     service_class = ForecastRunService
 
-    def generate(self, request):
-        """Trigger real ml_service forecast run(s) and store them. Body:
+    @staticmethod
+    def _parse(request):
+        """Shared by generate and preview. Body:
         {county_ids?: [int], as_of_date?: "YYYY-MM-DD", horizon_weeks?: int}
         — an absent/omitted county_ids defaults to every county with a
         boundary; an explicit empty list means "none" (not "default"),
@@ -25,8 +26,18 @@ class ForecastRunController(ReadOnlyController):
         as_of_raw = request.data.get("as_of_date")
         as_of_date = date.fromisoformat(as_of_raw) if as_of_raw else date.today()
         horizon_weeks = int(request.data.get("horizon_weeks", 4))
+        return counties, as_of_date, horizon_weeks
 
+    def generate(self, request):
+        """Trigger real ml_service forecast run(s) and store them."""
+        counties, as_of_date, horizon_weeks = self._parse(request)
         generated_by = request.user if request.user.is_authenticated else None
         return ForecastGenerationService().generate_for_counties(
             counties, as_of_date, horizon_weeks, generated_by=generated_by
         )
+
+    def preview(self, request):
+        """Same inputs and model as generate, nothing stored — lets the
+        dashboard show what a run would produce before anyone commits it."""
+        counties, as_of_date, horizon_weeks = self._parse(request)
+        return ForecastGenerationService().preview_for_counties(counties, as_of_date, horizon_weeks)

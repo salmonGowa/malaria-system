@@ -17,12 +17,8 @@ Usage:
     data/scripts/load_county_boundaries.py --download --dry-run
 """
 import argparse
-import io
-import json
 import os
-import re
 import sys
-import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -38,46 +34,25 @@ import django
 
 django.setup()
 
-from django.contrib.gis.geos import GEOSGeometry, MultiPolygon  # noqa: E402
-
 from cases.models import County  # noqa: E402
 
-GADM_URL = "https://geodata.ucdavis.edu/gadm/gadm4.1/json/gadm41_KEN_1.json.zip"
-NAME_FIELD = "NAME_1"
+from cases.services.county_boundary_service import (  # noqa: E402
+    NAME_FIELD,
+    download_gadm,
+    features_from_bytes,
+    normalize_name as _normalize,
+    to_multipolygon,
+)
 
-
-def _normalize(name):
-    """Loose match: 'Homa Bay' / 'HomaBay' / 'homa-bay' all collapse to 'homabay'."""
-    return re.sub(r"[^a-z0-9]", "", name.lower())
+# Name matching and geometry conversion live in CountyBoundaryService, shared
+# with the dashboard's "Locate on map" flow, so both behave identically.
 
 
 def load_features(source, download):
     if download:
-        import urllib.request
-
-        with urllib.request.urlopen(GADM_URL, timeout=30) as resp:
-            blob = resp.read()
-        with zipfile.ZipFile(io.BytesIO(blob)) as zf:
-            json_name = next(n for n in zf.namelist() if n.endswith(".json"))
-            data = json.loads(zf.read(json_name))
-    else:
-        path = Path(source)
-        if path.suffix == ".zip":
-            with zipfile.ZipFile(path) as zf:
-                json_name = next(n for n in zf.namelist() if n.endswith(".json"))
-                data = json.loads(zf.read(json_name))
-        else:
-            data = json.loads(path.read_text())
-    return data["features"]
-
-
-def to_multipolygon(geometry):
-    geom = GEOSGeometry(json.dumps(geometry))
-    if geom.geom_type == "Polygon":
-        geom = MultiPolygon(geom)
-    elif geom.geom_type != "MultiPolygon":
-        raise ValueError(f"Unexpected geometry type: {geom.geom_type}")
-    return geom
+        return features_from_bytes(download_gadm(timeout=30), is_zip=True)
+    path = Path(source)
+    return features_from_bytes(path.read_bytes(), is_zip=path.suffix == ".zip")
 
 
 def main(argv=None):

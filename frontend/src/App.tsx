@@ -226,7 +226,7 @@ export default function App() {
           >
             <MenuIcon size={20} />
           </button>
-          <span className="hidden max-[900px]:block font-semibold text-[0.9375rem]">
+          <span className="hidden max-[900px]:block min-w-0 truncate font-semibold text-[0.9375rem]">
             {activeItem ? t(activeItem.labelKey) : t("app.title")}
           </span>
           <div className="flex-1" />

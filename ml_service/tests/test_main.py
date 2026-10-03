@@ -76,3 +76,31 @@ def test_simulate_endpoint_returns_disclaimer():
     body = resp.json()
     assert "illustrative" in body["disclaimer"].lower()
     assert len(body["weeks"]) == 5  # week 0 + 4 horizon weeks
+
+
+def test_simulate_defaults_unchanged_and_new_fields_reported():
+    resp = client.post("/simulate", json={"population": 100000, "horizon_weeks": 8, "transmission_rate": 0.35})
+    body = resp.json()
+    assert body["model_name"] == "illustrative_seir"
+    assert body["band"] is None
+    assert abs(body["r_initial"] - 0.35 * 14) < 1e-9
+
+
+def test_simulate_vector_model_and_uncertainty_band():
+    resp = client.post(
+        "/simulate",
+        json={"population": 100000, "horizon_weeks": 12, "model": "vector", "intervention_coverage": 0.5, "uncertainty": True},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["model_name"] == "illustrative_vector"
+    assert "mosquitoes" in body["disclaimer"]
+    # Nets act on the biting rate twice in the vector model: R falls by (1-c)^2.
+    assert abs(body["r_with_interventions"] - body["r_initial"] * 0.25) < 1e-9
+    assert len(body["band"]) == len(body["weeks"])
+
+
+def test_simulate_rejects_a_partial_rainfall_year():
+    resp = client.post("/simulate", json={"population": 100000, "seasonal_rainfall_mm": [10, 20, 30]})
+    assert resp.status_code == 422
+

@@ -1,35 +1,25 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { api, County, ForecastRun, HistoricalCaseData, VaccineAllocation } from "../api/client";
 import Card from "../components/Card";
-import { AlertIcon, CheckCircleIcon, InfoIcon, TrendDownIcon, TrendFlatIcon, TrendUpIcon } from "../components/icons";
-import { priorityBadgeClass } from "../lib/badgeClasses";
-import { btnClass } from "../lib/buttonClasses";
 import {
-  recCardClass,
-  REC_ACTION_ITEM_CLASS,
-  REC_ACTIONS_CLASS,
-  REC_ACTIONS_LABEL_CLASS,
-  REC_CARD_HEADER_CLASS,
-  REC_CARD_TITLE_CLASS,
-  REC_CARD_TITLE_LINK_CLASS,
-  REC_FILTERS_CLASS,
-  REC_GRID_CLASS,
-  REC_STAT_CLASS,
-  REC_STAT_LABEL_CLASS,
-  REC_STAT_VALUE_CLASS,
-  REC_STATS_CLASS,
-  REC_SUMMARY_CLASS,
-  REC_WHY_CLASS,
-  REC_WHY_SUMMARY_CLASS,
-  REC_WHY_UL_CLASS,
-  recSummaryChipClass,
-  recSummaryCountClass,
-  trendBadgeClass,
-} from "../lib/decisionSupportClasses";
+  AlertIcon,
+  CheckCircleIcon,
+  InfoIcon,
+  SettingsIcon,
+  SparkleIcon,
+  TrendDownIcon,
+  TrendFlatIcon,
+  TrendUpIcon,
+} from "../components/icons";
+import { priorityBadgeClass } from "../lib/badgeClasses";
+import { BANNER_WARNING_CLASS } from "../lib/bannerClasses";
+import { btnClass } from "../lib/buttonClasses";
+import { recCardClass, REC_WHY_UL_CLASS } from "../lib/decisionSupportClasses";
 import { PLACEHOLDER_NOTE_CLASS } from "../lib/noteClasses";
 import { buildRecommendations, CountyRecommendation, Priority } from "../lib/recommendations";
+import type { DecisionThresholds } from "../lib/settings";
 import { useThresholds } from "../lib/useThresholds";
 import { useLanguage } from "../lib/i18n";
 
@@ -47,51 +37,157 @@ const PRIORITY_ICON: Record<Priority, typeof AlertIcon> = {
   "no-data": InfoIcon,
 };
 
-const FILTERS: { value: Priority | "all"; label: string }[] = [
-  { value: "all", label: "All counties" },
-  { value: "high", label: "High priority" },
-  { value: "mid", label: "Moderate" },
-  { value: "low", label: "Stable" },
-  { value: "no-data", label: "No data" },
+const BAND_FILL: Record<Priority, string> = {
+  high: "bg-risk-high",
+  mid: "bg-risk-mid",
+  low: "bg-risk-low",
+  "no-data": "bg-muted",
+};
+
+const FILTERS: { value: Priority | "all"; label: string; dot: string }[] = [
+  { value: "all", label: "All counties", dot: "bg-accent" },
+  { value: "high", label: "High priority", dot: "bg-risk-high" },
+  { value: "mid", label: "Moderate", dot: "bg-risk-mid" },
+  { value: "low", label: "Stable", dot: "bg-risk-low" },
+  { value: "no-data", label: "No data", dot: "bg-muted" },
 ];
 
-function TrendBadge({ rec }: { rec: CountyRecommendation }) {
+// Same cutoff recommendations.ts uses to add its "worth investigating" action.
+const RISING_ALERT_PCT = 20;
+
+/** Why a county is in "Needs attention" — null means it isn't. Priority
+ * comes first; a low-risk county still surfaces when its modelled trend is
+ * climbing fast or its forecast is too old to trust. */
+function attentionReason(rec: CountyRecommendation): string | null {
+  if (rec.priority === "high") return "High outbreak risk";
+  if (rec.priority === "mid") return "Moderate outbreak risk";
+  if (rec.trend === "rising" && rec.trendChangePct !== null && rec.trendChangePct > RISING_ALERT_PCT) {
+    return `Modelled trend up ${Math.round(rec.trendChangePct)}%`;
+  }
+  if (rec.forecastStale) return "Forecast is out of date";
+  return null;
+}
+
+const PRIORITY_ORDER: Record<Priority, number> = { high: 0, mid: 1, low: 2, "no-data": 3 };
+
+function byUrgency(a: CountyRecommendation, b: CountyRecommendation) {
+  return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority] || (b.riskScore ?? -1) - (a.riskScore ?? -1);
+}
+
+/** Risk as a bar with the Settings thresholds marked, so "46%" reads as
+ * "past moderate, well short of high" without knowing the cutoffs. */
+function RiskMeter({ rec, thresholds, compact = false }: { rec: CountyRecommendation; thresholds: DecisionThresholds; compact?: boolean }) {
+  const pct = rec.riskScore !== null ? Math.round(rec.riskScore * 100) : null;
+  return (
+    <div className={compact ? "w-full" : ""}>
+      {!compact && (
+        <div className="mb-1.5 flex items-baseline justify-between">
+          <span className="text-[0.8125rem] text-muted">Outbreak risk</span>
+          <span className="text-[1.35rem] font-bold tabular-nums text-text">{pct !== null ? `${pct}%` : "—"}</span>
+        </div>
+      )}
+      <div
+        className="relative h-1.5 rounded-full bg-panel-muted"
+        role="img"
+        aria-label={pct !== null ? `Risk ${pct}%` : "No risk score"}
+      >
+        {pct !== null && (
+          <div className={`h-full rounded-full ${BAND_FILL[rec.priority]}`} style={{ width: `${Math.max(pct, 2)}%` }} />
+        )}
+        {[thresholds.riskMid, thresholds.riskHigh].map((t) => (
+          <span key={t} className="absolute -top-0.5 h-2.5 w-px bg-border-strong" style={{ left: `${t * 100}%` }} />
+        ))}
+      </div>
+      {!compact && (
+        <div className="relative mt-1 h-3 text-[0.65rem] text-muted">
+          <span className="absolute -translate-x-1/2" style={{ left: `${thresholds.riskMid * 100}%` }}>
+            moderate
+          </span>
+          <span className="absolute -translate-x-1/2" style={{ left: `${thresholds.riskHigh * 100}%` }}>
+            high
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TrendValue({ rec }: { rec: CountyRecommendation }) {
   if (rec.trend === "unknown") {
     return (
-      <span className={trendBadgeClass("neutral")}>
-        <TrendFlatIcon size={13} /> No modelled trend data
+      <span className="inline-flex items-center gap-1 text-muted">
+        <TrendFlatIcon size={14} /> n/a
       </span>
     );
   }
   const pct = rec.trendChangePct !== null ? `${rec.trendChangePct > 0 ? "+" : ""}${Math.round(rec.trendChangePct)}%` : "";
-  if (rec.trend === "rising") {
-    return (
-      <span className={trendBadgeClass("caution")}>
-        <TrendUpIcon size={13} /> Modelled trend rising {pct}
-      </span>
-    );
-  }
-  if (rec.trend === "falling") {
-    return (
-      <span className={trendBadgeClass("good")}>
-        <TrendDownIcon size={13} /> Modelled trend falling {pct}
-      </span>
-    );
-  }
+  const [Icon, tone] =
+    rec.trend === "rising"
+      ? [TrendUpIcon, "text-risk-mid"]
+      : rec.trend === "falling"
+        ? [TrendDownIcon, "text-risk-low"]
+        : [TrendFlatIcon, "text-muted"];
   return (
-    <span className={trendBadgeClass("neutral")}>
-      <TrendFlatIcon size={13} /> Modelled trend stable
+    <span className={`inline-flex items-center gap-1 ${tone}`}>
+      <Icon size={14} /> {rec.trend === "stable" ? "Stable" : pct}
     </span>
   );
 }
 
-function RecommendationCard({ rec }: { rec: CountyRecommendation }) {
+function Stat({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-xs text-muted">{label}</div>
+      <div className="mt-0.5 text-[0.95rem] font-semibold tabular-nums text-text">{children}</div>
+      {hint && <div className="text-[0.7rem] text-muted">{hint}</div>}
+    </div>
+  );
+}
+
+function ForecastAge({ rec }: { rec: CountyRecommendation }) {
+  if (rec.forecastAgeDays === null) return <>—</>;
+  return <span className={rec.forecastStale ? "text-risk-high" : undefined}>{rec.forecastAgeDays}d</span>;
+}
+
+function ActionList({ actions }: { actions: string[] }) {
+  return (
+    <ul className="m-0 flex list-none flex-col gap-2 p-0">
+      {actions.map((a, i) => (
+        <li key={i} className="flex gap-2.5 text-[0.8125rem] leading-normal text-text-secondary">
+          <span className="mt-[3px] grid size-4 flex-none place-items-center rounded-full bg-accent-soft text-[0.6rem] font-bold text-accent-text">
+            {i + 1}
+          </span>
+          {a}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function WhyList({ reasons }: { reasons: string[] }) {
+  return (
+    <details className="group text-[0.8125rem]">
+      <summary className="cursor-pointer list-none font-semibold text-accent-text [&::-webkit-details-marker]:hidden">
+        <span className="inline-block transition-transform group-open:rotate-90">›</span> Why this recommendation?
+      </summary>
+      <ul className={REC_WHY_UL_CLASS}>
+        {reasons.map((r, i) => (
+          <li key={i}>{r}</li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+function AttentionCard({ rec, reason, thresholds }: { rec: CountyRecommendation; reason: string; thresholds: DecisionThresholds }) {
   const Icon = PRIORITY_ICON[rec.priority];
   return (
-    <Card className={recCardClass(rec.priority)}>
-      <div className={REC_CARD_HEADER_CLASS}>
-        <h3 className={REC_CARD_TITLE_CLASS}>
-          <Link to={`/counties/${rec.county.id}`} className={REC_CARD_TITLE_LINK_CLASS}>
+    // A low-risk county is only here because something else (trend, stale
+    // forecast) flagged it — amber accent says "watch", badge still says band.
+    <Card className={`flex flex-col ${recCardClass(rec.priority === "low" ? "mid" : rec.priority)}`}>
+      <div className="mb-1 flex items-start justify-between gap-3">
+        <h3 className="m-0 text-[1.15rem] font-bold tracking-[-0.01em]">
+          <Link to={`/counties/${rec.county.id}`} className="text-text no-underline hover:underline">
             {rec.county.name}
           </Link>
         </h3>
@@ -99,42 +195,73 @@ function RecommendationCard({ rec }: { rec: CountyRecommendation }) {
           <Icon size={13} /> {PRIORITY_LABEL[rec.priority]}
         </span>
       </div>
+      <p className="mt-0 mb-4 text-xs font-medium text-muted">Flagged: {reason}</p>
 
-      <div className={REC_STATS_CLASS}>
-        <div className={REC_STAT_CLASS}>
-          <span className={REC_STAT_LABEL_CLASS}>Risk score</span>
-          <span className={REC_STAT_VALUE_CLASS}>{rec.riskScore !== null ? `${Math.round(rec.riskScore * 100)}%` : "—"}</span>
-        </div>
-        <div className={REC_STAT_CLASS}>
-          <span className={REC_STAT_LABEL_CLASS}>Dose coverage</span>
-          <span className={REC_STAT_VALUE_CLASS}>{rec.coveragePct !== null ? `${rec.coveragePct.toFixed(1)}%` : "—"}</span>
-        </div>
-        <div className={REC_STAT_CLASS}>
-          <span className={REC_STAT_LABEL_CLASS}>Forecast age</span>
-          <span className={REC_STAT_VALUE_CLASS}>{rec.forecastAgeDays !== null ? `${rec.forecastAgeDays}d` : "—"}</span>
-        </div>
+      <RiskMeter rec={rec} thresholds={thresholds} />
+
+      <div className="my-4 grid grid-cols-3 gap-3 border-y border-border py-3">
+        <Stat label="Dose coverage">{rec.coveragePct !== null ? `${rec.coveragePct.toFixed(1)}%` : "—"}</Stat>
+        <Stat label="Modelled trend">
+          <TrendValue rec={rec} />
+        </Stat>
+        <Stat label="Forecast age">
+          <ForecastAge rec={rec} />
+        </Stat>
       </div>
 
-      <TrendBadge rec={rec} />
-
-      <p className={REC_ACTIONS_LABEL_CLASS}>Recommended actions</p>
-      <ul className={REC_ACTIONS_CLASS}>
-        {rec.actions.map((a, i) => (
-          <li key={i} className={REC_ACTION_ITEM_CLASS}>
-            {a}
-          </li>
-        ))}
-      </ul>
-
-      <details className={REC_WHY_CLASS}>
-        <summary className={REC_WHY_SUMMARY_CLASS}>Why?</summary>
-        <ul className={REC_WHY_UL_CLASS}>
-          {rec.reasons.map((r, i) => (
-            <li key={i}>{r}</li>
-          ))}
-        </ul>
-      </details>
+      <div className="mb-2 text-xs font-semibold text-muted">Recommended actions</div>
+      <div className="flex-1">
+        <ActionList actions={rec.actions} />
+      </div>
+      <div className="mt-4 border-t border-border pt-3">
+        <WhyList reasons={rec.reasons} />
+      </div>
     </Card>
+  );
+}
+
+const ROW_GRID = "grid grid-cols-[minmax(0,1.3fr)_minmax(0,1.6fr)_auto] items-center gap-4 min-[761px]:grid-cols-[minmax(0,1.2fr)_minmax(0,1.6fr)_90px_90px_70px_20px]";
+
+/** A low-priority county as one scannable row; expands to its actions. */
+function StableRow({ rec, thresholds }: { rec: CountyRecommendation; thresholds: DecisionThresholds }) {
+  const pct = rec.riskScore !== null ? `${Math.round(rec.riskScore * 100)}%` : "—";
+  return (
+    <details className="group border-t border-border first:border-t-0">
+      <summary className={`${ROW_GRID} cursor-pointer list-none px-4 py-3 hover:bg-panel-muted [&::-webkit-details-marker]:hidden`}>
+        <span className="flex min-w-0 items-center gap-2">
+          <span className={`size-2 flex-none rounded-full ${BAND_FILL[rec.priority]}`} />
+          <span className="truncate font-semibold text-text">{rec.county.name}</span>
+        </span>
+        <span className="flex items-center gap-3">
+          <span className="w-9 text-right text-[0.8125rem] font-semibold tabular-nums text-text">{pct}</span>
+          <RiskMeter rec={rec} thresholds={thresholds} compact />
+        </span>
+        <span className="hidden text-[0.8125rem] tabular-nums text-text-secondary min-[761px]:block">
+          {rec.coveragePct !== null ? `${rec.coveragePct.toFixed(1)}%` : "—"}
+        </span>
+        <span className="text-[0.8125rem] tabular-nums">
+          <TrendValue rec={rec} />
+        </span>
+        <span className="hidden text-[0.8125rem] tabular-nums text-text-secondary min-[761px]:block">
+          <ForecastAge rec={rec} />
+        </span>
+        <span className="hidden text-muted transition-transform group-open:rotate-90 min-[761px]:block" aria-hidden="true">
+          ›
+        </span>
+      </summary>
+      <div className="grid gap-4 bg-panel-muted/50 px-4 pt-1 pb-4 min-[761px]:grid-cols-2 min-[761px]:pl-8">
+        <div>
+          <div className="mb-2 text-xs font-semibold text-muted">Recommended actions</div>
+          <ActionList actions={rec.actions} />
+        </div>
+        <div className="flex flex-col gap-3">
+          <WhyList reasons={rec.reasons} />
+          <Link to={`/counties/${rec.county.id}`} className="text-[0.8125rem] font-semibold text-accent-text no-underline hover:underline">
+            County details →
+          </Link>
+        </div>
+      </div>
+    </details>
   );
 }
 
@@ -167,66 +294,139 @@ export default function DecisionSupport() {
   );
 
   const counts = useMemo(() => {
-    const c: Record<Priority, number> = { high: 0, mid: 0, low: 0, "no-data": 0 };
+    const c: Record<Priority | "all", number> = { all: recommendations.length, high: 0, mid: 0, low: 0, "no-data": 0 };
     for (const r of recommendations) c[r.priority]++;
     return c;
   }, [recommendations]);
 
-  const visible = filter === "all" ? recommendations : recommendations.filter((r) => r.priority === filter);
+  const visible = (filter === "all" ? recommendations : recommendations.filter((r) => r.priority === filter))
+    .slice()
+    .sort(byUrgency);
+  const attention = visible.flatMap((rec) => {
+    const reason = attentionReason(rec);
+    return reason ? [{ rec, reason }] : [];
+  });
+  const routine = visible.filter((rec) => attentionReason(rec) === null);
 
-  if (loading) return <p className={PLACEHOLDER_NOTE_CLASS}>Loading…</p>;
+  if (loading) {
+    return (
+      <div role="status" aria-busy="true" aria-label="Loading recommendations">
+        <div className="mb-6 h-12 w-72 animate-pulse rounded-lg bg-panel-muted" />
+        <div className="mb-6 grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
+          {Array.from({ length: 5 }, (_, i) => (
+            <div key={i} className="h-[76px] animate-pulse rounded-xl border border-border bg-panel" />
+          ))}
+        </div>
+        <div className="h-[320px] animate-pulse rounded-xl border border-border bg-panel" />
+      </div>
+    );
+  }
 
   return (
     <div>
-      <h2>{t("page.decisionSupport")}</h2>
-      <p className={PLACEHOLDER_NOTE_CLASS}>
-        Plain-language recommendations generated from your stored forecasts, allocations, and a modelled case
-        trend — using simple, fixed rules over real numbers, not a separate opaque model. Every card's "Why?" shows
-        exactly what drove it, and every card links back to the source (Forecasts, Vaccine Allocation). The cutoffs
-        behind "high risk", "stale", "under-covered" are configurable in <Link to="/settings">Settings</Link>.
-      </p>
-      {error && <p style={{ color: "var(--risk-high)" }}>Could not reach backend: {error}</p>}
+      <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
+        <div className="max-w-[70ch]">
+          <h2 className="m-0 text-[1.6rem] font-bold tracking-[-0.02em] text-text">{t("page.decisionSupport")}</h2>
+          <p className="mt-1 mb-0 text-sm text-muted">
+            Plain-language next steps for each county, from stored forecasts, allocations and the modelled case trend.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link className={btnClass("secondary", { className: "no-underline" })} to="/settings">
+            <SettingsIcon size={15} />
+            Adjust thresholds
+          </Link>
+          <Link className={btnClass("primary", { className: "no-underline" })} to="/generate-forecast">
+            <SparkleIcon size={15} />
+            Generate forecast
+          </Link>
+        </div>
+      </header>
 
-      <div className={REC_SUMMARY_CLASS}>
-        <button type="button" className={recSummaryChipClass("high")} onClick={() => setFilter("high")}>
-          <span className={recSummaryCountClass("high")}>{counts.high}</span>
-          <span>high priority</span>
-        </button>
-        <button type="button" className={recSummaryChipClass("mid")} onClick={() => setFilter("mid")}>
-          <span className={recSummaryCountClass("mid")}>{counts.mid}</span>
-          <span>moderate</span>
-        </button>
-        <button type="button" className={recSummaryChipClass("low")} onClick={() => setFilter("low")}>
-          <span className={recSummaryCountClass("low")}>{counts.low}</span>
-          <span>stable</span>
-        </button>
-        <button type="button" className={recSummaryChipClass("no-data")} onClick={() => setFilter("no-data")}>
-          <span className={recSummaryCountClass("no-data")}>{counts["no-data"]}</span>
-          <span>no data</span>
-        </button>
-      </div>
+      <details className="group mb-6 rounded-xl border border-border bg-panel px-4 py-3 text-[0.8125rem] text-text-secondary">
+        <summary className="cursor-pointer list-none font-semibold text-text [&::-webkit-details-marker]:hidden">
+          <span className="mr-1 inline-block text-muted transition-transform group-open:rotate-90">›</span>
+          How these recommendations are made
+        </summary>
+        <p className="mt-2 mb-0 leading-relaxed">
+          Simple, fixed rules over real numbers — not a separate opaque model. Every recommendation's "Why?" shows
+          exactly what drove it and links back to its source (Forecasts, Vaccine Allocation). The cutoffs behind
+          "high risk", "stale" and "under-covered" are configurable in <Link to="/settings">Settings</Link>. Trends come
+          from the modelled (synthetic) case series, so treat them as early signals, not field reports.
+        </p>
+      </details>
 
-      <div className={REC_FILTERS_CLASS}>
-        {FILTERS.map((f) => (
-          <button
-            key={f.value}
-            type="button"
-            className={btnClass(filter === f.value ? "primary" : "secondary", { sm: true })}
-            onClick={() => setFilter(f.value)}
-          >
-            {f.label}
-          </button>
-        ))}
+      {error && <p className={BANNER_WARNING_CLASS}>Could not reach backend: {error}</p>}
+
+      <div role="group" aria-label="Filter by priority" className="mb-8 grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
+        {FILTERS.map((f) => {
+          const active = filter === f.value;
+          return (
+            <button
+              key={f.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setFilter(f.value)}
+              className={
+                "flex cursor-pointer flex-col items-start gap-1 rounded-xl border px-4 py-3 text-left transition duration-150 " +
+                "hover:-translate-y-px hover:shadow-[var(--shadow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent " +
+                (active ? "border-accent bg-accent-soft shadow-[var(--shadow-sm)]" : "border-border bg-panel")
+              }
+            >
+              <span className="flex items-center gap-2 text-[0.8125rem] font-medium text-text-secondary">
+                <span className={`size-2 rounded-full ${f.dot}`} />
+                {f.label}
+              </span>
+              <span className="text-[1.6rem] font-bold leading-none tabular-nums text-text">{counts[f.value]}</span>
+            </button>
+          );
+        })}
       </div>
 
       {visible.length === 0 ? (
         <p className={PLACEHOLDER_NOTE_CLASS}>No counties match this filter.</p>
       ) : (
-        <div className={REC_GRID_CLASS}>
-          {visible.map((rec) => (
-            <RecommendationCard key={rec.county.id} rec={rec} />
-          ))}
-        </div>
+        <>
+          {attention.length > 0 && (
+            <section className="mb-8">
+              <div className="mb-3 flex items-baseline gap-2">
+                <h3 className="m-0 text-[1.05rem] font-bold text-text">Needs attention</h3>
+                <span className="text-sm text-muted">
+                  {attention.length} {attention.length === 1 ? "county" : "counties"}
+                </span>
+              </div>
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-x-4">
+                {attention.map(({ rec, reason }) => (
+                  <AttentionCard key={rec.county.id} rec={rec} reason={reason} thresholds={thresholds} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {routine.length > 0 && (
+            <section>
+              <div className="mb-3 flex items-baseline gap-2">
+                <h3 className="m-0 text-[1.05rem] font-bold text-text">Routine monitoring</h3>
+                <span className="text-sm text-muted">
+                  {routine.length} {routine.length === 1 ? "county" : "counties"} · select a row for details
+                </span>
+              </div>
+              <div className="mb-5 overflow-hidden rounded-xl border border-border bg-panel shadow-[var(--shadow-sm)]">
+                <div className={`${ROW_GRID} border-b border-border bg-panel-muted px-4 py-2 text-xs font-semibold text-muted`} aria-hidden="true">
+                  <span>County</span>
+                  <span>Outbreak risk</span>
+                  <span className="hidden min-[761px]:block">Coverage</span>
+                  <span>Trend</span>
+                  <span className="hidden min-[761px]:block">Forecast</span>
+                  <span className="hidden min-[761px]:block" />
+                </div>
+                {routine.map((rec) => (
+                  <StableRow key={rec.county.id} rec={rec} thresholds={thresholds} />
+                ))}
+              </div>
+            </section>
+          )}
+        </>
       )}
     </div>
   );

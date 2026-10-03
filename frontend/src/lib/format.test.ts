@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { formatCompact, formatNumber, riskBand } from "./format";
+import {
+  formatCompact,
+  formatDayLabel,
+  formatMonthName,
+  formatMonthTick,
+  formatNumber,
+  formatPeriod,
+  formatRelativeTime,
+  riskBand,
+} from "./format";
 
 describe("formatNumber", () => {
   it("adds thousands separators with no decimals", () => {
@@ -40,5 +49,53 @@ describe("riskBand", () => {
     // under a lower custom cutoff — proves the default isn't secretly
     // still in effect.
     expect(riskBand(0.55)).toBe("mid");
+  });
+});
+
+describe("formatMonthTick", () => {
+  it("renders a compact month + two-digit year", () => {
+    expect(formatMonthTick("2021-09-01")).toBe("Sep '21");
+    expect(formatMonthTick("2026-01")).toBe("Jan '26");
+  });
+
+  it("passes unparseable input through", () => {
+    expect(formatMonthTick("n/a")).toBe("n/a");
+  });
+});
+
+describe("formatDayLabel", () => {
+  it("renders day, short month and year without timezone drift", () => {
+    expect(formatDayLabel("2026-01-01")).toBe("1 Jan 2026");
+    expect(formatDayLabel("2026-12-31")).toBe("31 Dec 2026");
+  });
+});
+
+describe("formatMonthName", () => {
+  it("renders the full month and year for prose", () => {
+    expect(formatMonthName("2026-04-01")).toBe("April 2026");
+    expect(formatMonthName("2026-11")).toBe("November 2026");
+  });
+});
+
+describe("formatPeriod", () => {
+  it("collapses a shared month and year", () => {
+    expect(formatPeriod("2026-10-01", "2026-10-29")).toBe("1–29 Oct 2026");
+  });
+  it("spans months and years", () => {
+    expect(formatPeriod("2026-09-28", "2026-10-26")).toBe("28 Sep – 26 Oct 2026");
+    expect(formatPeriod("2026-12-15", "2027-01-12")).toBe("15 Dec 2026 – 12 Jan 2027");
+  });
+});
+
+describe("formatRelativeTime", () => {
+  const now = new Date("2026-10-02T12:00:00Z");
+  it("buckets recent times", () => {
+    expect(formatRelativeTime("2026-10-02T11:59:30Z", now)).toBe("just now");
+    expect(formatRelativeTime("2026-10-02T11:45:00Z", now)).toBe("15 min ago");
+    expect(formatRelativeTime("2026-10-02T09:00:00Z", now)).toBe("3h ago");
+    expect(formatRelativeTime("2026-09-29T12:00:00Z", now)).toBe("3d ago");
+  });
+  it("falls back to a date after a month", () => {
+    expect(formatRelativeTime("2026-07-01T12:00:00Z", now)).toBe("1 Jul 2026");
   });
 });

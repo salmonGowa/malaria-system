@@ -80,6 +80,46 @@ export interface County {
   boundary: GeoJsonGeometry;
 }
 
+/** GET /counties/{id}/boundary-suggestion/ — the official GADM boundary for
+ * a county name (read-only), and every GADM county name to pick from. */
+export interface BoundarySuggestion {
+  matched: boolean;
+  gadm_name: string | null;
+  geometry: GeoJsonGeometry | null;
+  candidates: string[];
+}
+
+export interface CountyReadiness {
+  has_boundary: boolean;
+  rainfall_months: number;
+  climatology_months: number;
+  case_months: number;
+  facilities: number;
+  forecast_ready: boolean;
+}
+
+export interface MalariaZone {
+  id: string;
+  label: string;
+  description: string;
+}
+
+/** GET /counties/readiness/ — keyed by county id (JSON object keys are strings). */
+export interface ReadinessResponse {
+  zones: MalariaZone[];
+  counties: Record<string, CountyReadiness>;
+}
+
+export interface PrepareDataResponse {
+  zone: string;
+  months: number;
+  first_month: string;
+  last_month: string;
+  rainfall_months: number;
+  rainfall_failed: string[];
+  readiness: CountyReadiness;
+}
+
 export interface HealthFacility {
   id: number;
   name: string;
@@ -191,6 +231,24 @@ export interface GenerateForecastsResponse {
   errors: GenerateForecastsError[];
 }
 
+/** One county's dry-run prediction from POST /forecasts/preview/ — the same
+ * fields generate would store, but nothing is saved (so no id/generated_at). */
+export interface ForecastPreview {
+  county: number;
+  county_name: string;
+  forecast_period_start: string;
+  forecast_period_end: string;
+  predicted_cases: number;
+  risk_score: number;
+  model_name: string;
+  model_version: string;
+}
+
+export interface PreviewForecastsResponse {
+  previews: ForecastPreview[];
+  errors: GenerateForecastsError[];
+}
+
 export interface GenerateAllocationsRequest {
   total_available_doses: number;
   county_ids?: number[];
@@ -252,6 +310,16 @@ export const api = {
   getCounty: (id: number) => request<County>(`${API_BASE_URL}/counties/${id}/`),
   createCounty: (body: NewCounty) =>
     request<County>(`${API_BASE_URL}/counties/`, { method: "POST", body: JSON.stringify(body) }),
+  simulationStart: (id: number) => request<SimulationStart>(`${API_BASE_URL}/counties/${id}/simulation-start/`),
+  countyReadiness: () => request<ReadinessResponse>(`${API_BASE_URL}/counties/readiness/`),
+  prepareCountyData: (id: number, zone: string) =>
+    request<PrepareDataResponse>(`${API_BASE_URL}/counties/${id}/prepare-data/`, { method: "POST", body: JSON.stringify({ zone }) }),
+  countyBoundarySuggestion: (id: number, name?: string) =>
+    request<BoundarySuggestion>(
+      `${API_BASE_URL}/counties/${id}/boundary-suggestion/${name ? `?name=${encodeURIComponent(name)}` : ""}`,
+    ),
+  applyCountyBoundary: (id: number, gadmName: string) =>
+    request<County>(`${API_BASE_URL}/counties/${id}/apply-boundary/`, { method: "POST", body: JSON.stringify({ gadm_name: gadmName }) }),
   updateCounty: (id: number, body: Partial<NewCounty>) =>
     request<County>(`${API_BASE_URL}/counties/${id}/`, { method: "PATCH", body: JSON.stringify(body) }),
   listFacilities: (page = 1) => request<Paginated<HealthFacility>>(`${API_BASE_URL}/facilities/?page=${page}`),
@@ -288,6 +356,8 @@ export const api = {
     request<Paginated<ForecastRun>>(`${API_BASE_URL}/forecasts/?page=${page}${county ? `&county=${county}` : ""}`),
   listAllForecasts: (county?: number) =>
     fetchAll<ForecastRun>(`${API_BASE_URL}/forecasts/${county ? `?county=${county}` : ""}`),
+  previewForecasts: (body: GenerateForecastsRequest) =>
+    request<PreviewForecastsResponse>(`${API_BASE_URL}/forecasts/preview/`, { method: "POST", body: JSON.stringify(body) }),
   generateForecasts: (body: GenerateForecastsRequest) =>
     request<GenerateForecastsResponse>(`${API_BASE_URL}/forecasts/generate/`, { method: "POST", body: JSON.stringify(body) }),
   listAllocations: (page = 1, county?: number) =>
@@ -314,6 +384,10 @@ export interface AllocationRequest {
   total_available_doses: number;
   county_forecasts: CountyForecast[];
   county_populations: Record<string, number>;
+  /** 0–1 cap on any one county's share of doses; ml_service defaults to 1.0. */
+  max_share_per_county?: number;
+  /** Equity floor: every county gets at least this many doses (capped at its population). */
+  min_doses_per_county?: number;
 }
 
 export interface AllocationLine {
@@ -336,6 +410,35 @@ export interface SimulationRequest {
   infectious_period_days: number;
   intervention_coverage: number;
   horizon_weeks: number;
+  // Optional — all off by default (see ml_service/app/simulation.py).
+  model?: "seir" | "vector";
+  intervention_start_week?: number;
+  vaccine_protected_fraction?: number;
+  seasonal_rainfall_mm?: number[] | null;
+  rainfall_sensitivity?: number;
+  start_month?: number;
+  uncertainty?: boolean;
+}
+
+export interface SimulationBandWeek {
+  week: number;
+  infectious_low: number;
+  infectious_high: number;
+}
+
+/** GET /counties/{id}/simulation-start/ — what a county's own data can
+ * supply to the outbreak simulator (never the transmission rate). */
+export interface SimulationStart {
+  county: number;
+  county_name: string;
+  population: number;
+  initial_infectious: number;
+  latest_month: string;
+  latest_month_cases: number;
+  recent_monthly_cases: { month: string; cases: number }[];
+  seasonal_rainfall_mm: number[] | null;
+  start_month: number;
+  assumptions: string[];
 }
 
 export interface SimulationWeek {
@@ -352,6 +455,11 @@ export interface SimulationResponse {
   peak_week: number;
   peak_infectious: number;
   total_projected_cases: number;
+  r_initial?: number | null;
+  r_with_interventions?: number | null;
+  band?: SimulationBandWeek[] | null;
+  total_cases_low?: number | null;
+  total_cases_high?: number | null;
   model_name: string;
   disclaimer: string;
 }

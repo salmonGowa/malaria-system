@@ -95,3 +95,18 @@ export function forecastAccuracy(
   }
   return rows.sort((a, b) => a.period.localeCompare(b.period));
 }
+
+/** The run a county's latest forecast should be compared against: the most
+ * recent earlier run that actually differs — a different forecast window,
+ * or a risk score that moved by at least `epsilon`. Back-to-back reruns of
+ * the same window (e.g. repeated e2e test runs) are skipped, so "change
+ * since previous" means a real change. `runs` must be newest first. */
+export function previousDistinctForecast(runs: ForecastRun[], epsilon = 0.01): ForecastRun | null {
+  const [latest, ...earlier] = runs;
+  if (!latest) return null;
+  return (
+    earlier.find(
+      (r) => r.forecast_period_start !== latest.forecast_period_start || Math.abs(r.risk_score - latest.risk_score) >= epsilon,
+    ) ?? null
+  );
+}

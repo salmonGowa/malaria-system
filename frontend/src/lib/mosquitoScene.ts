@@ -5,11 +5,17 @@ import * as THREE from "three";
  * iridescent wings, palps as long as the proboscis, hind legs held up.
  * Built from primitives (no model file). Body axis runs along +x (head).
  *
- * Mounts a canvas into `container` and returns a cleanup that disposes every
- * GPU resource. Loaded with a dynamic import so three.js stays out of the
- * main app bundle.
+ * Mounts a canvas into `container`. Returns `setTheme` (retunes lights and
+ * dust for a light or dark page without a remount) and `dispose`, which
+ * frees every GPU resource. Loaded with a dynamic import so three.js stays
+ * out of the main app bundle.
  */
-export function mountMosquito(container: HTMLElement, opts: { reduceMotion: boolean }): () => void {
+export type SceneTheme = "light" | "dark";
+
+export function mountMosquito(
+  container: HTMLElement,
+  opts: { reduceMotion: boolean; theme: SceneTheme },
+): { setTheme: (theme: SceneTheme) => void; dispose: () => void } {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -21,7 +27,8 @@ export function mountMosquito(container: HTMLElement, opts: { reduceMotion: bool
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
 
-  scene.add(new THREE.HemisphereLight(0x9a8cd0, 0x0a0812, 0.7));
+  const hemi = new THREE.HemisphereLight(0x9a8cd0, 0x0a0812, 0.7);
+  scene.add(hemi);
   const key = new THREE.DirectionalLight(0xffb59a, 2.4);
   key.position.set(3, 4, 5);
   scene.add(key);
@@ -188,19 +195,16 @@ export function mountMosquito(container: HTMLElement, opts: { reduceMotion: bool
   const dustGeo = new THREE.BufferGeometry();
   dustGeo.setAttribute("position", new THREE.BufferAttribute(dustPos, 3));
   dustGeo.setAttribute("color", new THREE.BufferAttribute(dustCol, 3));
-  const dust = new THREE.Points(
-    dustGeo,
-    new THREE.PointsMaterial({
-      size: 0.045,
-      map: dotTexture(),
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.7,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    }),
-  );
-  scene.add(dust);
+  const dustMat = new THREE.PointsMaterial({
+    size: 0.045,
+    map: dotTexture(),
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.7,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  scene.add(new THREE.Points(dustGeo, dustMat));
 
   // ---- interaction + loop ------------------------------------------------
   const BASE_YAW = -0.55;
@@ -244,8 +248,27 @@ export function mountMosquito(container: HTMLElement, opts: { reduceMotion: bool
 
   const render = () => renderer.render(scene, camera);
 
+  // Dark page: additive glow and strong violet rims. Light page: additive
+  // dust would vanish into white, so it blends normally, and more ambient
+  // light keeps the body from reading as a flat silhouette.
+  const setTheme = (theme: SceneTheme) => {
+    const light = theme === "light";
+    hemi.intensity = light ? 1.3 : 0.7;
+    hemi.groundColor.set(light ? 0x6b5a70 : 0x0a0812);
+    key.intensity = light ? 2.8 : 2.4;
+    rimA.intensity = light ? 22 : 45;
+    rimB.intensity = light ? 12 : 22;
+    renderer.toneMappingExposure = light ? 1.0 : 1.15;
+    dustMat.blending = light ? THREE.NormalBlending : THREE.AdditiveBlending;
+    dustMat.opacity = light ? 0.4 : 0.7;
+    dustMat.size = light ? 0.035 : 0.045;
+    dustMat.needsUpdate = true;
+    if (opts.reduceMotion) render();
+  };
+
   mosquito.rotation.set(0, BASE_YAW, 0);
   pose(0);
+  setTheme(opts.theme);
 
   let raf = 0;
   let visible = true;
@@ -277,7 +300,7 @@ export function mountMosquito(container: HTMLElement, opts: { reduceMotion: bool
   if (opts.reduceMotion) render();
   else loop();
 
-  return () => {
+  const dispose = () => {
     cancelAnimationFrame(raf);
     ro.disconnect();
     io.disconnect();
@@ -295,6 +318,8 @@ export function mountMosquito(container: HTMLElement, opts: { reduceMotion: bool
     renderer.dispose();
     renderer.domElement.remove();
   };
+
+  return { setTheme, dispose };
 }
 
 /** Translucent wing with veins, a fringed trailing edge, and the dark

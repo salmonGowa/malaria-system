@@ -1,23 +1,55 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import FlowMatchingSim from "../components/FlowMatchingSim";
+import { MoonIcon, SunIcon } from "../components/icons";
+import { useTheme, type Theme } from "../lib/theme";
+import type { SceneTheme } from "../lib/mosquitoScene";
 
-// Always-dark palette (the page doesn't follow the app theme toggle — it's a
-// single showcase surface). ink-3 is 5.9:1 on --pk-bg, the floor for any text.
-const TOKENS = {
-  "--pk-bg": "#08070D",
-  "--pk-surface": "#100F17",
-  "--pk-line": "rgba(255,255,255,0.08)",
-  "--pk-line-strong": "rgba(255,255,255,0.16)",
-  "--pk-ink": "#F4F2F8",
-  "--pk-ink-2": "#B9B5C6",
-  "--pk-ink-3": "#8F8A9E",
-  "--pk-peach": "#FF9E7A",
-  "--pk-violet": "#A78BFA",
-  "--pk-indigo": "#7C5CFF",
-  "--pk-green": "#4ADE9A",
-  colorScheme: "dark",
-} as CSSProperties;
+// Follows the app-wide theme (lib/theme). ink-3 is the floor for any text:
+// 5.9:1 on the dark bg, 5.6:1 on the light one. Light mode deepens the
+// accents so gradient headings and the violet kickers still clear AA.
+const TOKENS: Record<Theme, CSSProperties> = {
+  dark: {
+    "--pk-bg": "#08070D",
+    "--pk-surface": "#100F17",
+    "--pk-line": "rgba(255,255,255,0.08)",
+    "--pk-line-strong": "rgba(255,255,255,0.16)",
+    "--pk-tint": "rgba(255,255,255,0.04)",
+    "--pk-tint-strong": "rgba(255,255,255,0.08)",
+    "--pk-grid": "rgba(255,255,255,0.05)",
+    "--pk-ink": "#F4F2F8",
+    "--pk-ink-2": "#B9B5C6",
+    "--pk-ink-3": "#8F8A9E",
+    "--pk-peach": "#FF9E7A",
+    "--pk-violet": "#A78BFA",
+    "--pk-indigo": "#7C5CFF",
+    "--pk-green": "#4ADE9A",
+    "--pk-glow-a": "rgba(124,92,255,0.3)",
+    "--pk-glow-b": "rgba(255,158,122,0.13)",
+    "--pk-shadow": "rgba(0,0,0,0.8)",
+    colorScheme: "dark",
+  } as CSSProperties,
+  light: {
+    "--pk-bg": "#FBF8F5",
+    "--pk-surface": "#FFFFFF",
+    "--pk-line": "rgba(28,20,48,0.08)",
+    "--pk-line-strong": "rgba(28,20,48,0.15)",
+    "--pk-tint": "rgba(28,20,48,0.03)",
+    "--pk-tint-strong": "rgba(28,20,48,0.07)",
+    "--pk-grid": "rgba(28,20,48,0.05)",
+    "--pk-ink": "#15111F",
+    "--pk-ink-2": "#4A4558",
+    "--pk-ink-3": "#686378",
+    "--pk-peach": "#E0643C",
+    "--pk-violet": "#6A45F5",
+    "--pk-indigo": "#5530E0",
+    "--pk-green": "#0E9A62",
+    "--pk-glow-a": "rgba(124,92,255,0.16)",
+    "--pk-glow-b": "rgba(255,158,122,0.2)",
+    "--pk-shadow": "rgba(40,28,80,0.18)",
+    colorScheme: "light",
+  } as CSSProperties,
+};
 
 const DISPLAY = "font-lp-display text-balance tracking-[-0.03em] m-0";
 const GRADIENT_TEXT =
@@ -27,8 +59,8 @@ const BTN =
   "font-lp-display font-semibold text-[0.95rem] px-6 py-3.5 rounded-full no-underline " +
   "inline-flex items-center gap-2 cursor-pointer transition-[transform,background-color] duration-200 " +
   "hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--pk-violet)";
-const BTN_PRIMARY = `${BTN} bg-(--pk-ink) text-(--pk-bg) shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_12px_40px_-8px_rgba(167,139,250,0.55)]`;
-const BTN_GHOST = `${BTN} bg-white/[0.04] text-(--pk-ink) border border-(--pk-line-strong) hover:bg-white/[0.08]`;
+const BTN_PRIMARY = `${BTN} bg-(--pk-ink) text-(--pk-bg) shadow-[0_0_0_1px_var(--pk-line-strong),0_12px_40px_-8px_rgba(124,92,255,0.5)]`;
+const BTN_GHOST = `${BTN} bg-(--pk-tint) text-(--pk-ink) border border-(--pk-line-strong) hover:bg-(--pk-tint-strong)`;
 
 const ARROW = (
   <svg className="size-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
@@ -63,8 +95,11 @@ function hasWebGL() {
 
 /** WebGL mosquito (lib/mosquitoScene). three.js is imported on demand so
  * it never lands in the main app bundle; without WebGL only the glow shows. */
-function MosquitoStage() {
+function MosquitoStage({ theme }: { theme: SceneTheme }) {
   const ref = useRef<HTMLDivElement>(null);
+  const sceneRef = useRef<{ setTheme: (t: SceneTheme) => void } | null>(null);
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -76,7 +111,9 @@ function MosquitoStage() {
     import("../lib/mosquitoScene")
       .then(({ mountMosquito }) => {
         if (cancelled) return;
-        cleanup = mountMosquito(el, { reduceMotion });
+        const scene = mountMosquito(el, { reduceMotion, theme: themeRef.current });
+        sceneRef.current = scene;
+        cleanup = scene.dispose;
         setReady(true);
       })
       .catch(() => {
@@ -84,15 +121,20 @@ function MosquitoStage() {
       });
     return () => {
       cancelled = true;
+      sceneRef.current = null;
       cleanup?.();
     };
   }, []);
+
+  useEffect(() => {
+    sceneRef.current?.setTheme(theme);
+  }, [theme]);
 
   return (
     <div className="relative h-[380px] min-[561px]:h-[480px] min-[961px]:h-[620px]">
       <div
         aria-hidden="true"
-        className="absolute inset-[10%] rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.35),rgba(255,158,122,0.08)_45%,transparent_70%)] blur-2xl"
+        className="absolute inset-[10%] rounded-full bg-[radial-gradient(circle,var(--pk-glow-a),var(--pk-glow-b)_45%,transparent_70%)] blur-2xl"
       />
       <div
         ref={ref}
@@ -107,7 +149,29 @@ function MosquitoStage() {
   );
 }
 
+function ThemeButton() {
+  const { theme, toggleTheme } = useTheme();
+  const next = theme === "dark" ? "light" : "dark";
+  return (
+    <button
+      type="button"
+      onClick={toggleTheme}
+      aria-label={`Switch to ${next} mode`}
+      title={`Switch to ${next} mode`}
+      className={
+        "grid place-items-center size-10 rounded-full border border-(--pk-line-strong) bg-(--pk-tint) text-(--pk-ink-2) " +
+        "cursor-pointer transition-colors duration-200 hover:text-(--pk-ink) hover:bg-(--pk-tint-strong) " +
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--pk-violet)"
+      }
+    >
+      {theme === "dark" ? <SunIcon size={16} /> : <MoonIcon size={16} />}
+    </button>
+  );
+}
+
 export default function LandingPage() {
+  const { theme } = useTheme();
+
   useEffect(() => {
     const prevTitle = document.title;
     document.title = "Kinga Sentinel — AI-assisted malaria tracking, forecasting & vaccine allocation";
@@ -119,20 +183,20 @@ export default function LandingPage() {
   return (
     <div
       data-testid="landing-page"
-      style={TOKENS}
+      style={TOKENS[theme]}
       className={
-        "relative min-h-screen bg-(--pk-bg) text-(--pk-ink) font-sans antialiased overflow-x-clip " +
+        "relative min-h-screen bg-(--pk-bg) text-(--pk-ink) font-sans antialiased overflow-x-clip transition-colors duration-300 " +
         "selection:bg-(--pk-violet) selection:text-(--pk-bg)"
       }
     >
       {/* Top glow + faint grid */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-[1000px] overflow-hidden">
-        <div className="absolute right-[-10%] -top-[300px] size-[1000px] rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.3),transparent_62%)]" />
-        <div className="absolute left-[-5%] top-[160px] size-[480px] rounded-full bg-[radial-gradient(circle,rgba(255,158,122,0.13),transparent_65%)]" />
+        <div className="absolute right-[-10%] -top-[300px] size-[1000px] rounded-full bg-[radial-gradient(circle,var(--pk-glow-a),transparent_62%)]" />
+        <div className="absolute left-[-5%] top-[160px] size-[480px] rounded-full bg-[radial-gradient(circle,var(--pk-glow-b),transparent_65%)]" />
         <div
           className={
             "absolute inset-0 opacity-50 [mask-image:radial-gradient(ellipse_at_60%_25%,black,transparent_70%)] " +
-            "bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] " +
+            "bg-[linear-gradient(var(--pk-grid)_1px,transparent_1px),linear-gradient(90deg,var(--pk-grid)_1px,transparent_1px)] " +
             "bg-[size:64px_64px]"
           }
         />
@@ -143,7 +207,7 @@ export default function LandingPage() {
         <nav
           className={
             "max-w-[1180px] mx-auto flex items-center justify-between rounded-full border border-(--pk-line-strong) " +
-            "bg-(--pk-bg)/70 backdrop-blur-xl py-2 pr-2 pl-5 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.8)]"
+            "bg-(--pk-bg)/70 backdrop-blur-xl py-2 pr-2 pl-5 shadow-[0_10px_40px_-15px_var(--pk-shadow)]"
           }
         >
           <a href="#top" className="flex items-center gap-2.5 font-lp-display font-bold text-[1.02rem] tracking-[-0.01em] text-(--pk-ink) no-underline">
@@ -156,15 +220,18 @@ export default function LandingPage() {
           >
             Simulations
           </a>
-          <Link
-            to="/dashboard"
-            className={
-              "font-lp-display text-[0.85rem] font-semibold bg-(--pk-ink) text-(--pk-bg) px-5 py-2.5 rounded-full " +
-              "no-underline whitespace-nowrap transition-transform duration-200 hover:-translate-y-px"
-            }
-          >
-            See the platform
-          </Link>
+          <div className="flex items-center gap-2">
+            <ThemeButton />
+            <Link
+              to="/dashboard"
+              className={
+                "font-lp-display text-[0.85rem] font-semibold bg-(--pk-ink) text-(--pk-bg) px-5 py-2.5 rounded-full " +
+                "no-underline whitespace-nowrap transition-transform duration-200 hover:-translate-y-px"
+              }
+            >
+              See the platform
+            </Link>
+          </div>
         </nav>
       </div>
 
@@ -175,7 +242,7 @@ export default function LandingPage() {
             <span
               className={
                 "inline-flex items-center gap-2 font-mono text-[0.72rem] tracking-[0.08em] uppercase text-(--pk-ink-2) " +
-                "border border-(--pk-line-strong) bg-white/[0.03] px-3.5 py-2 rounded-full"
+                "border border-(--pk-line-strong) bg-(--pk-tint) px-3.5 py-2 rounded-full"
               }
             >
               <span className="size-1.5 rounded-full bg-(--pk-green) shadow-[0_0_10px_var(--pk-green)]" />
@@ -197,7 +264,7 @@ export default function LandingPage() {
               </Link>
             </div>
           </div>
-          <MosquitoStage />
+          <MosquitoStage theme={theme} />
         </section>
 
         {/* SIMULATIONS */}
@@ -214,7 +281,7 @@ export default function LandingPage() {
               intervention bends the curve.
             </p>
           </div>
-          <FlowMatchingSim />
+          <FlowMatchingSim theme={theme} />
           <Link
             to="/simulations"
             className="mt-6 inline-flex items-center gap-2 font-lp-display font-semibold text-[0.92rem] text-(--pk-ink) no-underline hover:gap-3 transition-[gap] duration-200"
@@ -228,7 +295,7 @@ export default function LandingPage() {
           <div className="relative isolate overflow-hidden rounded-[36px] border border-(--pk-line-strong) bg-(--pk-surface) px-6 py-16 min-[561px]:px-12 min-[561px]:py-20 text-center">
             <div
               aria-hidden="true"
-              className="absolute -z-10 left-1/2 top-full -translate-x-1/2 -translate-y-1/2 size-[900px] rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.45),rgba(255,158,122,0.15)_40%,transparent_65%)]"
+              className="absolute -z-10 left-1/2 top-full -translate-x-1/2 -translate-y-1/2 size-[900px] rounded-full bg-[radial-gradient(circle,var(--pk-glow-a),var(--pk-glow-b)_40%,transparent_65%)]"
             />
             <h2 className={`${DISPLAY} text-[clamp(2rem,5vw,3.6rem)] font-extrabold leading-[1] max-w-[18ch] mx-auto text-(--pk-ink)`}>
               Built for the counties carrying the heaviest burden.

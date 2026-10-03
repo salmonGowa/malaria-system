@@ -54,11 +54,26 @@ def optimise_allocation(request: AllocationRequest) -> AllocationResponse:
     # Total doses constraint.
     problem += pulp.lpSum(doses[code] for code in counties) <= request.total_available_doses
 
+    # Equity floor — each county's minimum, never above its own population.
+    floors = {
+        code: min(request.min_doses_per_county, population_by_county[code])
+        if population_by_county.get(code) is not None
+        else request.min_doses_per_county
+        for code in counties
+    }
+    if sum(floors.values()) > request.total_available_doses:
+        raise ValueError(
+            f"A floor of {request.min_doses_per_county:,} doses per county needs {sum(floors.values()):,} doses, "
+            f"more than the {request.total_available_doses:,} available."
+        )
+
     for code in counties:
         # Can't allocate more doses than the at-risk population in a county.
         cap = population_by_county.get(code)
         if cap is not None:
             problem += doses[code] <= cap
+        if floors[code] > 0:
+            problem += doses[code] >= floors[code]
         # Optional policy ceiling — see module docstring. A no-op at the
         # default max_share_per_county=1.0 (share_cap == total_available_doses,
         # never tighter than the total-doses constraint above).
@@ -79,6 +94,8 @@ def optimise_allocation(request: AllocationRequest) -> AllocationResponse:
         )
         if request.max_share_per_county < 1.0:
             rationale += f" and at {request.max_share_per_county:.0%} of total doses ({int(share_cap)})"
+        if floors[code] > 0:
+            rationale += f", with a guaranteed minimum of {floors[code]:,}"
         allocations.append(AllocationLine(county_code=code, recommended_doses=recommended, rationale=rationale + "."))
 
     return AllocationResponse(

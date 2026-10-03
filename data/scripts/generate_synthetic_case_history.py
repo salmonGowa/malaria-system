@@ -107,9 +107,13 @@ def county_seed(county_code):
     return int(hashlib.sha256(county_code.encode()).hexdigest()[:8], 16)
 
 
-def generate_series(county, rainfall_by_month, months):
-    """Returns {month: confirmed_cases} for one county."""
-    annual_rate = ANNUAL_CASES_PER_1000.get(county.name)
+def generate_series(county, rainfall_by_month, months, annual_rate=None):
+    """Returns {month: confirmed_cases} for one county. `annual_rate`
+    (cases per 1,000 per year) overrides the ANNUAL_CASES_PER_1000 table —
+    used for counties added later via the dashboard, which pass their
+    epidemiological zone's rate (cases/services/county_data_service.py)."""
+    if annual_rate is None:
+        annual_rate = ANNUAL_CASES_PER_1000.get(county.name)
     if annual_rate is None:
         raise ValueError(f"No ANNUAL_CASES_PER_1000 entry for {county.name!r} — add one before generating for it.")
     population = county.population or 1_000_000

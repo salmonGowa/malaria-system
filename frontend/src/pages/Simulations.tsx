@@ -1,314 +1,90 @@
-import { useEffect, useMemo, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useRef, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 
-import {
-  AllocationResponse,
-  api,
-  County,
-  ForecastRun,
-  mlApi,
-  SimulationResponse,
-} from "../api/client";
-import Card, { CARD_SUBTITLE_CLASS, CARD_TITLE_CLASS } from "../components/Card";
-import { KPI_HINT_CLASS, KPI_LABEL_CLASS, KPI_ROW_CLASS, KPI_VALUE_CLASS, kpiCardClass } from "../components/KpiCard";
-import LabeledSlider from "../components/LabeledSlider";
-import { useDebouncedValue } from "../hooks/useDebouncedValue";
-import { BANNER_WARNING_CLASS } from "../lib/bannerClasses";
-import { formatCompact, formatNumber } from "../lib/format";
+import { AllocationIcon, SimulationIcon } from "../components/icons";
+import AllocationSimulator from "../components/simulations/AllocationSimulator";
+import OutbreakSimulator, { type IncomingScenario } from "../components/simulations/OutbreakSimulator";
+import { btnClass } from "../lib/buttonClasses";
 import { useLanguage } from "../lib/i18n";
-import { PLACEHOLDER_NOTE_CLASS } from "../lib/noteClasses";
-import { SIM_CONTROLS_CLASS, SIM_COUNTY_SLIDERS_CLASS, SIM_LAYOUT_CLASS, SIM_OUTPUT_CLASS } from "../lib/simClasses";
+import { useSimText, type SimKey } from "../lib/i18n/simulations";
+import type { OutbreakParams } from "../lib/outbreakScenario";
+
+type TabId = "outbreak" | "allocation";
+
+const TABS: { id: TabId; label: SimKey; question: SimKey; icon: ReactNode }[] = [
+  { id: "outbreak", label: "tab.outbreak", question: "tab.outbreakQ", icon: <SimulationIcon size={18} /> },
+  { id: "allocation", label: "tab.allocation", question: "tab.allocationQ", icon: <AllocationIcon size={18} /> },
+];
 
 export default function Simulations() {
   const { t } = useLanguage();
+  const st = useSimText();
+  const [tab, setTab] = useState<TabId>(() => (window.location.hash === "#allocation" ? "allocation" : "outbreak"));
+  const [incoming, setIncoming] = useState<IncomingScenario | null>(null);
+  const nonce = useRef(0);
+
+  const select = (id: TabId) => {
+    setTab(id);
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${id}`);
+  };
+
+  // The allocation tab's "Open in simulator": carry the county, its doses
+  // (as vaccine protection) and the impact assumptions across.
+  const openOutbreak = (params: OutbreakParams) => {
+    setIncoming({ params, nonce: ++nonce.current });
+    select("outbreak");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   return (
     <div>
-      <h2>{t("page.simulations")}</h2>
-      <p className={PLACEHOLDER_NOTE_CLASS}>
-        Both panels below call the ml_service directly and recompute live as you drag —
-        nothing here is saved to the database.
-      </p>
-      <AllocationSimulator />
-      <OutbreakSimulator />
+      <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h2 className="m-0 text-[1.6rem] font-bold tracking-[-0.02em] text-text">{t("page.simulations")}</h2>
+          <p className="mt-1 mb-0 text-sm text-muted">{st("page.subtitle")}</p>
+        </div>
+        <Link className={btnClass("secondary", { className: "no-underline" })} to="/upload-simulate">
+          {st("page.uploadLink")}
+        </Link>
+      </header>
+
+      <div role="tablist" aria-label={st("page.tablist")} className="mb-5 grid gap-3 min-[761px]:grid-cols-2">
+        {TABS.map((tb) => {
+          const active = tab === tb.id;
+          return (
+            <button
+              key={tb.id}
+              id={`sim-tab-${tb.id}`}
+              role="tab"
+              type="button"
+              aria-selected={active}
+              aria-controls={`sim-panel-${tb.id}`}
+              onClick={() => select(tb.id)}
+              className={
+                "flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3.5 text-left transition duration-150 " +
+                "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent " +
+                (active ? "border-accent bg-accent-soft shadow-[var(--shadow-sm)]" : "border-border bg-panel hover:border-border-strong")
+              }
+            >
+              <span className={`grid size-9 flex-none place-items-center rounded-lg ${active ? "bg-accent text-white" : "bg-panel-muted text-muted"}`}>
+                {tb.icon}
+              </span>
+              <span>
+                <span className="block text-[0.95rem] font-semibold text-text">{st(tb.label)}</span>
+                <span className="mt-0.5 block text-[0.8125rem] leading-snug text-muted">{st(tb.question)}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Both stay mounted (just hidden) so switching tabs keeps each one's settings. */}
+      <div role="tabpanel" id="sim-panel-outbreak" aria-labelledby="sim-tab-outbreak" hidden={tab !== "outbreak"}>
+        <OutbreakSimulator incoming={incoming} />
+      </div>
+      <div role="tabpanel" id="sim-panel-allocation" aria-labelledby="sim-tab-allocation" hidden={tab !== "allocation"}>
+        <AllocationSimulator onOpenOutbreak={openOutbreak} />
+      </div>
     </div>
-  );
-}
-
-// --- Vaccine allocation what-if -------------------------------------------
-// Real logic: this calls ml_service's PuLP linear-programming optimiser
-// (app/allocation.py) exactly as a production allocation run would.
-
-function AllocationSimulator() {
-  const [counties, setCounties] = useState<County[]>([]);
-  const [latestRiskByCounty, setLatestRiskByCounty] = useState<Map<number, number>>(new Map());
-  const [riskOverrides, setRiskOverrides] = useState<Record<number, number>>({});
-  const [totalDoses, setTotalDoses] = useState(50000);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [result, setResult] = useState<AllocationResponse | null>(null);
-  const [runError, setRunError] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
-
-  useEffect(() => {
-    Promise.all([api.listAllCounties(), api.listAllForecasts()])
-      .then(([c, forecasts]: [County[], ForecastRun[]]) => {
-        setCounties(c);
-        const latest = new Map<number, ForecastRun>();
-        for (const f of forecasts) {
-          const current = latest.get(f.county);
-          if (!current || new Date(f.generated_at) > new Date(current.generated_at)) {
-            latest.set(f.county, f);
-          }
-        }
-        const riskMap = new Map<number, number>();
-        const defaults: Record<number, number> = {};
-        for (const county of c) {
-          const risk = latest.get(county.id)?.risk_score ?? 0.5;
-          riskMap.set(county.id, risk);
-          defaults[county.id] = risk;
-        }
-        setLatestRiskByCounty(riskMap);
-        setRiskOverrides(defaults);
-      })
-      .catch((err) => setLoadError(err.message));
-  }, []);
-
-  const debouncedRisk = useDebouncedValue(riskOverrides, 250);
-  const debouncedDoses = useDebouncedValue(totalDoses, 250);
-
-  useEffect(() => {
-    if (counties.length === 0) return;
-    setRunning(true);
-    mlApi
-      .allocate({
-        total_available_doses: debouncedDoses,
-        county_forecasts: counties.map((c) => ({
-          county_code: c.code,
-          forecast_period_start: new Date().toISOString().slice(0, 10),
-          forecast_period_end: new Date().toISOString().slice(0, 10),
-          predicted_cases: 0,
-          risk_score: debouncedRisk[c.id] ?? 0.5,
-          model_name: "simulation_input",
-          model_version: "n/a",
-        })),
-        county_populations: Object.fromEntries(counties.map((c) => [c.code, c.population ?? 0])),
-      })
-      .then((res) => {
-        setResult(res);
-        setRunError(null);
-      })
-      .catch((err) => setRunError(err.message))
-      .finally(() => setRunning(false));
-  }, [counties, debouncedRisk, debouncedDoses]);
-
-  const totalPopulation = useMemo(() => counties.reduce((sum, c) => sum + (c.population ?? 0), 0), [counties]);
-
-  const chartData = useMemo(() => {
-    if (!result) return [];
-    const byCode = new Map(counties.map((c) => [c.code, c.name]));
-    return result.allocations
-      .map((a) => ({ name: byCode.get(a.county_code) ?? a.county_code, doses: a.recommended_doses }))
-      .sort((a, b) => b.doses - a.doses);
-  }, [result, counties]);
-
-  if (loadError) {
-    return (
-      <Card>
-        <h3 className={CARD_TITLE_CLASS}>Vaccine allocation what-if</h3>
-        <p style={{ color: "var(--risk-high)" }}>Could not load counties/forecasts: {loadError}</p>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <h3 className={CARD_TITLE_CLASS}>Vaccine allocation what-if</h3>
-      <p className={CARD_SUBTITLE_CLASS}>
-        Adjust total available doses and per-county risk to see how the real allocation
-        optimiser (risk-weighted linear program, ml_service/app/allocation.py) redistributes doses.
-      </p>
-
-      <div className={SIM_LAYOUT_CLASS}>
-        <div className={SIM_CONTROLS_CLASS}>
-          <LabeledSlider
-            label="Total available doses"
-            value={totalDoses}
-            onChange={setTotalDoses}
-            min={0}
-            max={Math.max(totalPopulation, 100000)}
-            step={1000}
-            formatValue={formatNumber}
-          />
-          <div className={SIM_COUNTY_SLIDERS_CLASS}>
-            {counties.map((c) => (
-              <LabeledSlider
-                key={c.id}
-                label={c.name}
-                value={riskOverrides[c.id] ?? latestRiskByCounty.get(c.id) ?? 0.5}
-                onChange={(v) => setRiskOverrides((prev) => ({ ...prev, [c.id]: v }))}
-                min={0}
-                max={1}
-                step={0.01}
-                formatValue={(v) => v.toFixed(2)}
-                hint={`pop. ${formatCompact(c.population ?? 0)}`}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className={SIM_OUTPUT_CLASS}>
-          {runError && <p style={{ color: "var(--risk-high)" }}>Simulation failed: {runError}</p>}
-          {result && (
-            <>
-              <div className={KPI_ROW_CLASS}>
-                <div className={kpiCardClass()}>
-                  <div className={KPI_LABEL_CLASS}>Allocated</div>
-                  <div className={KPI_VALUE_CLASS}>{formatNumber(result.total_allocated_doses)}</div>
-                  <div className={KPI_HINT_CLASS}>of {formatNumber(result.total_available_doses)} available</div>
-                </div>
-              </div>
-              <ResponsiveContainer width="100%" height={Math.max(220, chartData.length * 28)}>
-                <BarChart data={chartData} layout="vertical" margin={{ left: 24 }}>
-                  <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
-                  <XAxis type="number" stroke="var(--muted)" fontSize={12} />
-                  <YAxis type="category" dataKey="name" stroke="var(--muted)" fontSize={12} width={100} />
-                  <Tooltip contentStyle={{ background: "var(--panel)", border: "1px solid var(--border)" }} />
-                  <Bar dataKey="doses" fill="var(--accent)" radius={[0, 4, 4, 0]} isAnimationActive={!running} />
-                </BarChart>
-              </ResponsiveContainer>
-            </>
-          )}
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-// --- Outbreak simulator (illustrative SEIR) -------------------------------
-// This is NOT the trained forecasting model — see ml_service/app/simulation.py.
-
-function OutbreakSimulator() {
-  const [population, setPopulation] = useState(500000);
-  const [initialInfectious, setInitialInfectious] = useState(50);
-  const [transmissionRate, setTransmissionRate] = useState(0.35);
-  const [interventionCoverage, setInterventionCoverage] = useState(0.3);
-  const [horizonWeeks, setHorizonWeeks] = useState(24);
-  const [result, setResult] = useState<SimulationResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const params = useDebouncedValue(
-    { population, initialInfectious, transmissionRate, interventionCoverage, horizonWeeks },
-    250,
-  );
-
-  useEffect(() => {
-    mlApi
-      .simulate({
-        population: params.population,
-        initial_infectious: params.initialInfectious,
-        transmission_rate: params.transmissionRate,
-        incubation_period_days: 10,
-        infectious_period_days: 14,
-        intervention_coverage: params.interventionCoverage,
-        horizon_weeks: params.horizonWeeks,
-      })
-      .then((res) => {
-        setResult(res);
-        setError(null);
-      })
-      .catch((err) => setError(err.message));
-  }, [params]);
-
-  return (
-    <Card>
-      <h3 className={CARD_TITLE_CLASS}>Outbreak trajectory simulator</h3>
-      <p className={BANNER_WARNING_CLASS}>
-        {result?.disclaimer ??
-          "Illustrative generic SEIR model — not the trained, data-fitted forecasting model. For exploring intervention trade-offs only."}
-      </p>
-
-      <div className={SIM_LAYOUT_CLASS}>
-        <div className={SIM_CONTROLS_CLASS}>
-          <LabeledSlider
-            label="Population at risk"
-            value={population}
-            onChange={setPopulation}
-            min={10000}
-            max={3000000}
-            step={10000}
-            formatValue={formatCompact}
-          />
-          <LabeledSlider
-            label="Initial infectious"
-            value={initialInfectious}
-            onChange={setInitialInfectious}
-            min={1}
-            max={1000}
-            step={1}
-            formatValue={formatNumber}
-          />
-          <LabeledSlider
-            label="Transmission rate (β)"
-            value={transmissionRate}
-            onChange={setTransmissionRate}
-            min={0.05}
-            max={1.2}
-            step={0.01}
-            formatValue={(v) => v.toFixed(2)}
-            hint="Higher = faster spread"
-          />
-          <LabeledSlider
-            label="Intervention coverage"
-            value={interventionCoverage}
-            onChange={setInterventionCoverage}
-            min={0}
-            max={0.95}
-            step={0.01}
-            formatValue={(v) => `${Math.round(v * 100)}%`}
-            hint="Bed nets / IRS / chemoprevention reducing effective transmission"
-          />
-          <LabeledSlider
-            label="Horizon"
-            value={horizonWeeks}
-            onChange={setHorizonWeeks}
-            min={4}
-            max={52}
-            step={1}
-            formatValue={(v) => `${v} weeks`}
-          />
-        </div>
-
-        <div className={SIM_OUTPUT_CLASS}>
-          {error && <p style={{ color: "var(--risk-high)" }}>Simulation failed: {error}</p>}
-          {result && (
-            <>
-              <div className={KPI_ROW_CLASS}>
-                <div className={kpiCardClass("mid")}>
-                  <div className={KPI_LABEL_CLASS}>Peak infectious</div>
-                  <div className={KPI_VALUE_CLASS}>{formatCompact(result.peak_infectious)}</div>
-                  <div className={KPI_HINT_CLASS}>week {result.peak_week}</div>
-                </div>
-                <div className={kpiCardClass()}>
-                  <div className={KPI_LABEL_CLASS}>Projected total cases</div>
-                  <div className={KPI_VALUE_CLASS}>{formatCompact(result.total_projected_cases)}</div>
-                  <div className={KPI_HINT_CLASS}>over {horizonWeeks} weeks</div>
-                </div>
-              </div>
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={result.weeks}>
-                  <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
-                  <XAxis dataKey="week" stroke="var(--muted)" fontSize={12} label={{ value: "week", position: "insideBottom", offset: -4, fill: "var(--muted)" }} />
-                  <YAxis stroke="var(--muted)" fontSize={12} tickFormatter={formatCompact} />
-                  <Tooltip contentStyle={{ background: "var(--panel)", border: "1px solid var(--border)" }} />
-                  <Legend />
-                  <Line type="monotone" dataKey="infectious" name="Infectious" stroke="var(--risk-high)" dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey="exposed" name="Exposed" stroke="var(--risk-mid)" dot={false} strokeWidth={1.5} />
-                  <Line type="monotone" dataKey="new_cases" name="New cases/wk" stroke="var(--accent)" dot={false} strokeWidth={1.5} strokeDasharray="4 3" />
-                </LineChart>
-              </ResponsiveContainer>
-            </>
-          )}
-        </div>
-      </div>
-    </Card>
   );
 }

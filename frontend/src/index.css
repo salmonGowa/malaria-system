@@ -88,7 +88,7 @@
   
   --risk-high: #c42a1e;
   --risk-high-soft: rgba(217, 45, 32, 0.1);
-  --risk-mid: #b54708;
+  --risk-mid: #a3420a;
   --risk-mid-soft: rgba(181, 71, 8, 0.1);
   
   --risk-low: #086b52;
@@ -127,7 +127,7 @@
     --accent-text: #56d6ae;
     --accent-soft: rgba(47, 174, 143, 0.16);
 
-    --risk-high: #f0655e;
+    --risk-high: #f57a74;
     --risk-high-soft: rgba(240, 101, 94, 0.14);
     --risk-mid: #eab04a;
     --risk-mid-soft: rgba(234, 176, 74, 0.14);
@@ -161,7 +161,7 @@
   --accent-text: #56d6ae;
   --accent-soft: rgba(47, 174, 143, 0.16);
 
-  --risk-high: #f0655e;
+  --risk-high: #f57a74;
   --risk-high-soft: rgba(240, 101, 94, 0.14);
   --risk-mid: #eab04a;
   --risk-mid-soft: rgba(234, 176, 74, 0.14);
@@ -293,6 +293,11 @@ h2 {
    rather than depend on a hosted dark-tile provider (most now require an
    API key). County/risk overlay colors are untouched since the filter only
    targets the tile pane, and it only applies in dark mode. */
+/* Light: mute the basemap's greens/blues so the risk colors carry the map. */
+[data-theme="light"] .leaflet-tile-pane {
+  filter: saturate(0.25) brightness(1.04);
+}
+
 [data-theme="dark"] .leaflet-tile-pane {
   filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.6);
 }

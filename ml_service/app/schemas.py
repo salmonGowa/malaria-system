@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -57,6 +58,15 @@ class AllocationRequest(BaseModel):
             "across multiple high-risk counties instead of concentrating in one."
         ),
     )
+    min_doses_per_county: int = Field(
+        0,
+        ge=0,
+        description=(
+            "Equity floor: every county gets at least this many doses (or its whole at-risk "
+            "population, if smaller), before the risk-weighted objective distributes the rest. "
+            "Rejected if the floors alone exceed the supply."
+        ),
+    )
 
 
 class AllocationLine(BaseModel):
@@ -84,6 +94,38 @@ class SimulationRequest(BaseModel):
     )
     horizon_weeks: int = Field(24, ge=1, le=104)
 
+    # Everything below defaults to "off" — a request without these fields
+    # behaves exactly as the original constant-transmission SEIR did.
+    model: Literal["seir", "vector"] = Field(
+        "seir",
+        description=(
+            "'seir' — human-only SEIR with transmission_rate as beta. 'vector' — Ross-Macdonald "
+            "human SEIR + mosquito SEI, with mosquito density calibrated so its R0 matches the "
+            "SEIR's at the same transmission_rate; interventions cut the biting rate, so they "
+            "act on transmission twice (mosquito-to-human and human-to-mosquito)."
+        ),
+    )
+    intervention_start_week: int = Field(
+        0, ge=0, le=104, description="Week interventions take effect; 0 = in place from the start."
+    )
+    vaccine_protected_fraction: float = Field(
+        0.0, ge=0, le=1, description="Share of the population protected (by vaccination) from week 0."
+    )
+    seasonal_rainfall_mm: list[float] | None = Field(
+        None,
+        min_length=12,
+        max_length=12,
+        description=(
+            "Mean rainfall for each calendar month, Jan..Dec. When given, transmission follows "
+            "the rains (1-month lag, same response curve as app/compartmental.py), normalised "
+            "so the year-average equals transmission_rate — seasons redistribute transmission "
+            "across the year rather than inflate it."
+        ),
+    )
+    rainfall_sensitivity: float = Field(1.0, ge=0, le=15, description="k in beta * (1 + k*log1p(rain/40)).")
+    start_month: int = Field(1, ge=1, le=12, description="Calendar month (1-12) that week 0 falls in.")
+    uncertainty: bool = Field(False, description="Also return a band from transmission_rate x0.8 and x1.2.")
+
 
 class SimulationWeek(BaseModel):
     week: int
@@ -94,11 +136,22 @@ class SimulationWeek(BaseModel):
     new_cases: float
 
 
+class SimulationBandWeek(BaseModel):
+    week: int
+    infectious_low: float
+    infectious_high: float
+
+
 class SimulationResponse(BaseModel):
     weeks: list[SimulationWeek]
     peak_week: int
     peak_infectious: float
     total_projected_cases: float
+    r_initial: float | None = None  # reproduction number at week 0, before interventions
+    r_with_interventions: float | None = None  # ...once interventions are in place
+    band: list[SimulationBandWeek] | None = None
+    total_cases_low: float | None = None
+    total_cases_high: float | None = None
     model_name: str = "illustrative_seir"
     disclaimer: str = (
         "Illustrative generic SEIR model with user-supplied parameters — not the "

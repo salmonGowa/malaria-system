@@ -83,6 +83,18 @@ def monthly_value(mean, amplitude, shape, month_index, seed_offset):
     return mean + seasonal + wobble
 
 
+def climatology_values(cal, months):
+    """[(month, temperature_c, humidity_pct)] for one county's calibration
+    dict (temp_mean/temp_amp/humidity_mean/humidity_amp) over `months` — the
+    same calculation main() writes, reusable for counties added later."""
+    rows = []
+    for i, month in enumerate(months):
+        temp = monthly_value(cal["temp_mean"], cal["temp_amp"], TEMP_SEASONAL_SHAPE, month.month - 1, i)
+        humidity = monthly_value(cal["humidity_mean"], cal["humidity_amp"], HUMIDITY_SEASONAL_SHAPE, month.month - 1, i)
+        rows.append((month, temp, min(max(humidity, 0.0), 100.0)))
+    return rows
+
+
 def month_range(start, end):
     """Yield the first-of-month date for each month from start to end inclusive."""
     y, m = start.year, start.month
@@ -112,11 +124,7 @@ def main(argv=None):
     written = 0
     for county in counties:
         cal = COUNTY_CLIMATOLOGY[county.name]
-        for i, month in enumerate(month_range(start, end)):
-            temp = monthly_value(cal["temp_mean"], cal["temp_amp"], TEMP_SEASONAL_SHAPE, month.month - 1, i)
-            humidity = monthly_value(cal["humidity_mean"], cal["humidity_amp"], HUMIDITY_SEASONAL_SHAPE, month.month - 1, i)
-            humidity = min(max(humidity, 0.0), 100.0)
-
+        for month, temp, humidity in climatology_values(cal, list(month_range(start, end))):
             if args.dry_run:
                 print(f"{county.name} {month:%Y-%m}: temp={temp:.1f}C humidity={humidity:.0f}%")
                 continue

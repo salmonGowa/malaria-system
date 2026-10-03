@@ -8,6 +8,7 @@ import {
   historicalCaseTrend,
   historicalRainfallTrend,
   latestForecastByCounty,
+  previousDistinctForecast,
   seasonalClimatology,
 } from "./analytics";
 
@@ -135,5 +136,31 @@ describe("forecastAccuracy", () => {
   it("drops forecasts with no matching historical month rather than zero-filling", () => {
     const forecasts = [forecast({ county: 1, forecast_period_start: "2099-01-01" })];
     expect(forecastAccuracy(forecasts, [])).toEqual([]);
+  });
+});
+
+describe("previousDistinctForecast", () => {
+  const run = (id: number, start: string, risk: number) =>
+    forecast({ id, forecast_period_start: start, risk_score: risk });
+
+  it("skips identical back-to-back reruns", () => {
+    const runs = [run(4, "2026-09-13", 0.46), run(3, "2026-09-13", 0.46), run(2, "2026-09-13", 0.465), run(1, "2026-09-12", 0)];
+    expect(previousDistinctForecast(runs)?.id).toBe(1);
+  });
+
+  it("counts a moved score in the same window as distinct", () => {
+    const runs = [run(2, "2026-09-13", 0.5), run(1, "2026-09-13", 0.3)];
+    expect(previousDistinctForecast(runs)?.id).toBe(1);
+  });
+
+  it("counts a new window with the same score as distinct", () => {
+    const runs = [run(2, "2026-10-01", 0.03), run(1, "2026-09-30", 0.03)];
+    expect(previousDistinctForecast(runs)?.id).toBe(1);
+  });
+
+  it("returns null when every earlier run is a duplicate, or there are none", () => {
+    expect(previousDistinctForecast([run(2, "2026-09-13", 0.1), run(1, "2026-09-13", 0.1)])).toBeNull();
+    expect(previousDistinctForecast([run(1, "2026-09-13", 0.1)])).toBeNull();
+    expect(previousDistinctForecast([])).toBeNull();
   });
 });

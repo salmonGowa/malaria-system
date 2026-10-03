@@ -52,13 +52,37 @@ function seir(r0: number) {
   return { curve, peak, peakWeek, attack: 1 - S };
 }
 
+// Canvas can't read CSS tokens cheaply per frame, so each theme carries its
+// own copy. Particles go violet → peach as t runs 0 → 1. On light, additive
+// "lighter" blending would wash out to white, so it composites normally.
+const CANVAS_THEME = {
+  dark: {
+    label: "#8F8A9E",
+    grid: "rgba(255,255,255,0.06)",
+    target: "rgba(255,158,122,0.55)",
+    from: [167, 139, 250],
+    to: [255, 158, 122],
+    alpha: 0.75,
+    blend: "lighter" as GlobalCompositeOperation,
+  },
+  light: {
+    label: "#686378",
+    grid: "rgba(28,20,48,0.07)",
+    target: "rgba(224,100,60,0.6)",
+    from: [106, 69, 245],
+    to: [224, 100, 60],
+    alpha: 0.6,
+    blend: "source-over" as GlobalCompositeOperation,
+  },
+};
+
 function gauss() {
   const u = 1 - Math.random();
   const v = Math.random();
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
-export default function FlowMatchingSim() {
+export default function FlowMatchingSim({ theme }: { theme: "light" | "dark" }) {
   const bgRef = useRef<HTMLCanvasElement>(null);
   const fgRef = useRef<HTMLCanvasElement>(null);
   const readoutRef = useRef<HTMLSpanElement>(null);
@@ -66,6 +90,8 @@ export default function FlowMatchingSim() {
   const [scenario, setScenario] = useState(0);
   const [autoplay, setAutoplay] = useState(true);
   const [replayKey, setReplayKey] = useState(0);
+  const paletteRef = useRef(CANVAS_THEME[theme]);
+  paletteRef.current = CANVAS_THEME[theme];
   const runs = useMemo(() => SCENARIOS.map((s) => seir(s.r0)), []);
   const yMax = useMemo(() => Math.max(...runs.map((r) => r.peak)) * 1.15, [runs]);
 
@@ -121,10 +147,11 @@ export default function FlowMatchingSim() {
     if (!canvas || !ctx) return;
     const draw = () => {
       const { w, h, pad } = fit(canvas, ctx);
+      const pal = CANVAS_THEME[theme];
       ctx.clearRect(0, 0, w, h);
       ctx.font = "10px JetBrains Mono, monospace";
-      ctx.fillStyle = "#8F8A9E";
-      ctx.strokeStyle = "rgba(255,255,255,0.06)";
+      ctx.fillStyle = pal.label;
+      ctx.strokeStyle = pal.grid;
       ctx.lineWidth = 1;
       for (let i = 0; i <= 4; i++) {
         const y = pad.t + ((h - pad.t - pad.b) * i) / 4;
@@ -142,7 +169,7 @@ export default function FlowMatchingSim() {
       }
       const { curve } = runs[scenario];
       ctx.setLineDash([4, 5]);
-      ctx.strokeStyle = "rgba(255,158,122,0.55)";
+      ctx.strokeStyle = pal.target;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       for (let k = 0; k <= SAMPLES; k++) {
@@ -158,7 +185,7 @@ export default function FlowMatchingSim() {
     const ro = new ResizeObserver(draw);
     ro.observe(canvas);
     return () => ro.disconnect();
-  }, [scenario, runs, yMax]);
+  }, [scenario, runs, yMax, theme]);
 
   // Particle layer.
   useEffect(() => {
@@ -189,16 +216,17 @@ export default function FlowMatchingSim() {
       const pw = w - pad.l - pad.r;
       const ph = h - pad.t - pad.b;
 
-      // Fade the previous frame for trails.
+      // Fade the previous frame for trails. Partial destination-out never
+      // quite reaches zero (8-bit alpha rounding), so once the flow settles
+      // clear fully — otherwise a ghost of the previous curve lingers.
       ctx.globalCompositeOperation = "destination-out";
-      ctx.fillStyle = reduce ? "rgba(0,0,0,1)" : "rgba(0,0,0,0.2)";
+      ctx.fillStyle = reduce || raw >= 1 ? "rgba(0,0,0,1)" : "rgba(0,0,0,0.2)";
       ctx.fillRect(0, 0, w, h);
-      ctx.globalCompositeOperation = "lighter";
+      const pal = paletteRef.current;
+      ctx.globalCompositeOperation = pal.blend;
 
-      const r = Math.round(167 + (255 - 167) * t);
-      const g = Math.round(139 + (158 - 139) * t);
-      const b = Math.round(250 + (122 - 250) * t);
-      ctx.fillStyle = `rgba(${r},${g},${b},0.75)`;
+      const [r, g, b] = pal.from.map((c, k) => Math.round(c + (pal.to[k] - c) * t));
+      ctx.fillStyle = `rgba(${r},${g},${b},${pal.alpha})`;
       const bend = Math.sin(Math.PI * t);
       for (let i = 0; i < N; i++) {
         const dx = s.tx[i] - s.sx[i];
@@ -281,7 +309,7 @@ export default function FlowMatchingSim() {
           <span ref={readoutRef} className="w-[64px] font-mono text-[0.74rem] text-(--pk-ink-2)">
             t = 0.00
           </span>
-          <div className="flex-1 h-1 rounded-full bg-white/[0.07] overflow-hidden">
+          <div className="flex-1 h-1 rounded-full bg-(--pk-tint-strong) overflow-hidden">
             <div ref={barRef} style={{ transform: "scaleX(0)" }} className="h-full origin-left bg-linear-to-r from-(--pk-violet) to-(--pk-peach)" />
           </div>
           <span className="font-mono text-[0.68rem] text-(--pk-ink-3)">noise → forecast</span>

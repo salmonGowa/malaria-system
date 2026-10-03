@@ -99,3 +99,32 @@ def test_max_share_per_county_default_preserves_original_behaviour():
     by_code = {a.county_code: a.recommended_doses for a in result.allocations}
     assert by_code["HIGH"] == 3000
     assert by_code["LOW"] == 2000
+
+
+def test_equity_floor_guarantees_every_county_a_minimum():
+    from app.schemas import AllocationRequest
+
+    request = AllocationRequest(
+        total_available_doses=1000,
+        county_forecasts=[_forecast("A", 0.9), _forecast("B", 0.1), _forecast("C", 0.05)],
+        county_populations={"A": 10_000, "B": 10_000, "C": 50},
+        min_doses_per_county=100,
+    )
+    by_code = {line.county_code: line.recommended_doses for line in optimise_allocation(request).allocations}
+    assert by_code["B"] >= 100
+    assert by_code["C"] == 50  # floor capped at the county's own population
+    assert by_code["A"] == 1000 - by_code["B"] - by_code["C"]
+
+
+def test_equity_floor_the_supply_cannot_cover_is_rejected():
+    import pytest
+    from app.schemas import AllocationRequest
+
+    request = AllocationRequest(
+        total_available_doses=100,
+        county_forecasts=[_forecast("A", 0.9), _forecast("B", 0.1)],
+        county_populations={"A": 10_000, "B": 10_000},
+        min_doses_per_county=80,
+    )
+    with pytest.raises(ValueError):
+        optimise_allocation(request)

@@ -710,3 +710,301 @@ class CountyAndFacilityWriteTests(TestCase):
         )
         self.assertEqual(resp.status_code, 401)
     
+
+
+_PREDICTION = {
+    "forecast_period_start": "2026-05-01",
+    "forecast_period_end": "2026-05-28",
+    "predicted_cases": 150.0,
+    "risk_score": 0.62,
+    "model_name": "xgboost_v1",
+    "model_version": "test",
+}
+
+
+class ForecastPreviewTests(TestCase):
+    """POST /api/forecasts/preview/ — a dry run of /generate/: same inputs,
+    same model call, nothing stored."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(username="analyst", password="testpass123")
+        self.token = Token.objects.create(user=self.user)
+        self.county = County.objects.create(name="Kisumu", code="KEN-042", population=500_000)
+        for i, (cases, rain) in enumerate([(100.0, 20.0), (120.0, 40.0), (90.0, 15.0), (140.0, 60.0)]):
+            month = date(2026, 1 + i, 1)
+            HistoricalCaseData.objects.create(county=self.county, period_start=month, confirmed_cases=cases, source="synthetic_v1")
+            ClimateObservation.objects.create(county=self.county, observation_date=month, rainfall_mm=rain, source="CHIRPS")
+
+    @patch("cases.services.forecast_generation_service.requests.post")
+    def test_preview_sends_the_same_payload_as_generate_and_stores_nothing(self, mock_post):
+        mock_post.return_value = _mock_response(200, _PREDICTION)
+        service = ForecastGenerationService()
+
+        previews, errors = service.preview_for_counties([self.county], date(2026, 5, 1))
+        preview_payload = mock_post.call_args.kwargs["json"]
+        self.assertEqual(errors, [])
+        self.assertEqual(previews[0]["county"], self.county.id)
+        self.assertEqual(previews[0]["risk_score"], 0.62)
+        self.assertEqual(ForecastRun.objects.count(), 0)
+
+        service.generate_for_county(self.county, date(2026, 5, 1))
+        self.assertEqual(mock_post.call_args.kwargs["json"], preview_payload)
+
+    @patch("cases.services.forecast_generation_service.requests.post")
+    def test_preview_reports_one_countys_failure_without_aborting(self, mock_post):
+        other = County.objects.create(name="Busia", code="KEN-040", population=900_000)
+        mock_post.side_effect = lambda url, json, timeout: (
+            _mock_response(422, {"detail": "not enough history"}) if json["county_code"] == "KEN-040" else _mock_response(200, _PREDICTION)
+        )
+        previews, errors = ForecastGenerationService().preview_for_counties([self.county, other], date(2026, 5, 1))
+        self.assertEqual([p["county_name"] for p in previews], ["Kisumu"])
+        self.assertEqual(errors[0]["county_name"], "Busia")
+
+    @patch("cases.services.forecast_generation_service.requests.post")
+    def test_preview_endpoint_returns_predictions_without_writing(self, mock_post):
+        mock_post.return_value = _mock_response(200, _PREDICTION)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token.key}")
+        resp = self.client.post("/api/forecasts/preview/", {"county_ids": [self.county.id], "as_of_date": "2026-05-01"}, format="json")
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data["previews"][0]["county_name"], "Kisumu")
+        self.assertEqual(resp.data["errors"], [])
+        self.assertEqual(ForecastRun.objects.count(), 0)
+
+    def test_preview_endpoint_requires_sign_in(self):
+        resp = self.client.post("/api/forecasts/preview/", {"county_ids": [self.county.id]}, format="json")
+        self.assertIn(resp.status_code, (401, 403))
+
+
+def _gadm_zip(features):
+    """A fake GADM download: the real file's zip-of-json shape."""
+    import io as _io
+    import json as _json
+    import zipfile as _zipfile
+
+    buf = _io.BytesIO()
+    with _zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("gadm41_KEN_1.json", _json.dumps({"type": "FeatureCollection", "features": features}))
+    return buf.getvalue()
+
+
+_MACHAKOS_FEATURE = {
+    "type": "Feature",
+    "properties": {"NAME_1": "Machakos"},
+    "geometry": {"type": "Polygon", "coordinates": [[[37.0, -1.0], [37.5, -1.0], [37.5, -1.5], [37.0, -1.5], [37.0, -1.0]]]},
+}
+_HOMA_BAY_FEATURE = {
+    "type": "Feature",
+    "properties": {"NAME_1": "Homa Bay"},
+    "geometry": {"type": "Polygon", "coordinates": [[[34.2, -0.4], [34.6, -0.4], [34.6, -0.8], [34.2, -0.8], [34.2, -0.4]]]},
+}
+
+
+class CountyBoundaryTests(TestCase):
+    """Locating a county on the map: the official GADM boundary is suggested
+    (read-only), then applied on confirmation. Never hand-drawn geometry."""
+
+    def setUp(self):
+        from cases.services import county_boundary_service as svc
+
+        self.svc = svc
+        svc._FEATURES_CACHE.clear()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cache_path = Path(self.tmp.name) / "gadm.json"
+        self.downloads = 0
+
+        def fake_download(timeout=60):
+            self.downloads += 1
+            return _gadm_zip([_MACHAKOS_FEATURE, _HOMA_BAY_FEATURE])
+
+        self.patches = [
+            patch.object(svc, "DEFAULT_CACHE_PATH", self.cache_path),
+            patch.object(svc, "download_gadm", fake_download),
+        ]
+        for p in self.patches:
+            p.start()
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(username="analyst", password="testpass123")
+        self.token = Token.objects.create(user=self.user)
+        self.county = County.objects.create(name="Machakos", code="KEN-016", population=1_400_000)
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+        self.svc._FEATURES_CACHE.clear()
+        self.tmp.cleanup()
+
+    def test_suggest_matches_loosely_by_name_and_saves_nothing(self):
+        homa = County.objects.create(name="homa-bay", code="KEN-043")
+        result = self.svc.CountyBoundaryService().suggest(homa)
+        self.assertTrue(result["matched"])
+        self.assertEqual(result["gadm_name"], "Homa Bay")
+        self.assertEqual(result["candidates"], ["Homa Bay", "Machakos"])
+        homa.refresh_from_db()
+        self.assertIsNone(homa.boundary)
+
+    def test_download_is_cached_to_disk_and_reused(self):
+        self.svc.CountyBoundaryService().names()
+        self.assertTrue(self.cache_path.exists())
+        self.svc._FEATURES_CACHE.clear()  # new process
+        self.svc.CountyBoundaryService().names()
+        self.assertEqual(self.downloads, 1)
+
+    def test_no_match_returns_candidates_to_pick_from(self):
+        typo = County.objects.create(name="Machakoss", code="KEN-099")
+        result = self.svc.CountyBoundaryService().suggest(typo)
+        self.assertFalse(result["matched"])
+        self.assertIsNone(result["geometry"])
+        self.assertIn("Machakos", result["candidates"])
+
+    def test_suggestion_endpoint_requires_sign_in(self):
+        resp = self.client.get(f"/api/counties/{self.county.id}/boundary-suggestion/")
+        self.assertIn(resp.status_code, (401, 403))
+
+    def test_apply_endpoint_saves_the_gadm_geometry(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token.key}")
+        suggestion = self.client.get(f"/api/counties/{self.county.id}/boundary-suggestion/")
+        self.assertEqual(suggestion.status_code, 200)
+        self.assertEqual(suggestion.data["gadm_name"], "Machakos")
+
+        resp = self.client.post(f"/api/counties/{self.county.id}/apply-boundary/", {"gadm_name": "Machakos"}, format="json")
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data["boundary"]["type"], "MultiPolygon")
+        self.county.refresh_from_db()
+        self.assertEqual(self.county.boundary.geom_type, "MultiPolygon")
+        self.assertAlmostEqual(self.county.boundary.extent[0], 37.0)
+
+    def test_apply_rejects_an_unknown_name(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token.key}")
+        resp = self.client.post(f"/api/counties/{self.county.id}/apply-boundary/", {"gadm_name": "Atlantis"}, format="json")
+        self.assertEqual(resp.status_code, 400)
+        self.county.refresh_from_db()
+        self.assertIsNone(self.county.boundary)
+
+    def test_boundary_still_cannot_be_set_through_plain_update(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token.key}")
+        square = {"type": "Polygon", "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]]}
+        self.client.patch(f"/api/counties/{self.county.id}/", {"boundary": square}, format="json")
+        self.county.refresh_from_db()
+        self.assertIsNone(self.county.boundary)
+
+
+class CountyDataPreparationTests(TestCase):
+    """POST /api/counties/{id}/prepare-data/ — makes a dashboard-added county
+    forecast-ready: real CHIRPS rainfall over its polygon, plus synthetic
+    climatology and case history from its epidemiological zone."""
+
+    def setUp(self):
+        from cases.services import county_data_service as svc
+
+        self.tmp = tempfile.TemporaryDirectory()
+        chirps = Path(self.tmp.name)
+        # Four monthly rasters: 10 mm, 20 mm, 30 mm, 40 mm everywhere.
+        for i in range(4):
+            with rasterio.open(
+                chirps / f"chirps-v2.0.2026.0{i + 1}.tif", "w", driver="GTiff", height=10, width=10, count=1,
+                dtype="float32", crs="EPSG:4326", transform=from_origin(0, 10, 1, 1),
+            ) as dst:
+                dst.write(np.full((10, 10), 10.0 * (i + 1), dtype="float32"), 1)
+        self.patch = patch.object(svc, "CHIRPS_DIR", chirps)
+        self.patch.start()
+
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(username="analyst", password="testpass123")
+        self.token = Token.objects.create(user=self.user)
+        square = MultiPolygon(GEOSGeometry(Polygon([(2, 2), (2, 8), (8, 8), (8, 2), (2, 2)]).wkt))
+        self.county = County.objects.create(name="Machakos", code="KEN-016", population=1_400_000, boundary=square)
+
+    def tearDown(self):
+        self.patch.stop()
+        self.tmp.cleanup()
+
+    def _prepare(self, zone="seasonal"):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token.key}")
+        return self.client.post(f"/api/counties/{self.county.id}/prepare-data/", {"zone": zone}, format="json")
+
+    def test_prepare_writes_real_rainfall_and_labelled_synthetic_history(self):
+        resp = self._prepare()
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertTrue(resp.data["readiness"]["forecast_ready"])
+
+        rain = list(
+            ClimateObservation.objects.filter(county=self.county, source="CHIRPS").order_by("observation_date").values_list("rainfall_mm", flat=True)
+        )
+        self.assertEqual([round(r) for r in rain], [10, 20, 30, 40])  # the real raster values
+        self.assertEqual(ClimateObservation.objects.filter(county=self.county, source="synthetic_climatology_v1").count(), 4)
+        self.assertEqual(HistoricalCaseData.objects.filter(county=self.county, source="synthetic_v1").count(), 4)
+
+    def test_prepare_is_idempotent(self):
+        self._prepare()
+        self._prepare()
+        self.assertEqual(HistoricalCaseData.objects.filter(county=self.county).count(), 4)
+        self.assertEqual(ClimateObservation.objects.filter(county=self.county, source="CHIRPS").count(), 4)
+
+    def test_zone_sets_the_case_level(self):
+        self._prepare("low_risk")
+        low = sum(HistoricalCaseData.objects.filter(county=self.county).values_list("confirmed_cases", flat=True))
+        self._prepare("lake_endemic")
+        high = sum(HistoricalCaseData.objects.filter(county=self.county).values_list("confirmed_cases", flat=True))
+        self.assertGreater(high, low * 10)
+
+    def test_requires_a_boundary_and_a_known_zone(self):
+        self.assertEqual(self._prepare("tropical").status_code, 400)
+        no_shape = County.objects.create(name="Kitui", code="KEN-015")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token.key}")
+        resp = self.client.post(f"/api/counties/{no_shape.id}/prepare-data/", {"zone": "seasonal"}, format="json")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("locate it on the map", resp.data["detail"])
+
+    def test_prepare_requires_sign_in(self):
+        resp = self.client.post(f"/api/counties/{self.county.id}/prepare-data/", {"zone": "seasonal"}, format="json")
+        self.assertIn(resp.status_code, (401, 403))
+
+    def test_readiness_reports_each_county(self):
+        before = self.client.get("/api/counties/readiness/").data
+        self.assertFalse(before["counties"][self.county.id]["forecast_ready"])
+        self.assertIn("seasonal", [z["id"] for z in before["zones"]])
+        self._prepare()
+        after = self.client.get("/api/counties/readiness/").data["counties"][self.county.id]
+        self.assertEqual(after["rainfall_months"], 4)
+        self.assertTrue(after["forecast_ready"])
+
+
+class SimulationStartTests(TestCase):
+    """GET /api/counties/{id}/simulation-start/ — real starting values for
+    the outbreak simulator."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.county = County.objects.create(name="Kisumu", code="KEN-042", population=1_200_000)
+        for i, cases in enumerate([20_000.0, 25_000.0, 30_000.0]):
+            HistoricalCaseData.objects.create(county=self.county, period_start=date(2026, 6 + i, 1), confirmed_cases=cases, source="synthetic_v1")
+        for year in (2025, 2026):
+            for month in range(1, 13):
+                ClimateObservation.objects.create(
+                    county=self.county, observation_date=date(year, month, 1), rainfall_mm=10.0 * month + (year - 2025) * 10, source="CHIRPS"
+                )
+
+    def test_returns_population_current_infections_and_seasonality(self):
+        resp = self.client.get(f"/api/counties/{self.county.id}/simulation-start/")
+        self.assertEqual(resp.status_code, 200, resp.data)
+        body = resp.data
+        self.assertEqual(body["population"], 1_200_000)
+        # Latest month 30,000 cases -> ~30,000/30.44*14 people infectious now.
+        self.assertAlmostEqual(body["initial_infectious"], 30_000 / (365.25 / 12) * 14, delta=1)
+        self.assertEqual(len(body["seasonal_rainfall_mm"]), 12)
+        self.assertAlmostEqual(body["seasonal_rainfall_mm"][0], 15.0)  # Jan: mean of 10 and 20
+        self.assertEqual([m["cases"] for m in body["recent_monthly_cases"]], [20_000.0, 25_000.0, 30_000.0])
+
+    def test_county_without_case_history_is_explained(self):
+        empty = County.objects.create(name="Machakos", code="KEN-016", population=1_400_000)
+        resp = self.client.get(f"/api/counties/{empty.id}/simulation-start/")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("set it up", resp.data["detail"])
+
+    def test_infectious_estimate_is_capped(self):
+        tiny = County.objects.create(name="Tiny", code="KEN-099", population=1_000)
+        HistoricalCaseData.objects.create(county=tiny, period_start=date(2026, 8, 1), confirmed_cases=50_000.0, source="synthetic_v1")
+        resp = self.client.get(f"/api/counties/{tiny.id}/simulation-start/")
+        self.assertEqual(resp.data["initial_infectious"], 200)
+        self.assertIsNone(resp.data["seasonal_rainfall_mm"])

@@ -1,5 +1,6 @@
 import { UploadSimulationResponse } from "../api/client";
 import { DecisionThresholds, DEFAULT_THRESHOLDS } from "./settings";
+import { formatMonthName } from "./format";
 
 /** Decision-support layer for Upload & Simulate — the same spirit as
  * lib/recommendations.ts (plain, fixed rules over real numbers a user can
@@ -152,11 +153,11 @@ export function buildUploadInsights(
 
   const reasons: string[] = [];
   if (historicalPeak) {
-    reasons.push(`Highest point in your uploaded data: ${Math.round(historicalPeak.value).toLocaleString()} cases around ${historicalPeak.date}.`);
+    reasons.push(`Highest point in your uploaded data: ${Math.round(historicalPeak.value).toLocaleString()} cases around ${formatMonthName(historicalPeak.date)}.`);
   }
   if (projectedPeak) {
     reasons.push(
-      `Highest point in the projection: ${Math.round(projectedPeak.value).toLocaleString()} cases around ${projectedPeak.date}` +
+      `Highest point in the projection: ${Math.round(projectedPeak.value).toLocaleString()} cases around ${formatMonthName(projectedPeak.date)}` +
         (peakRatio !== null ? ` — ${Math.round(peakRatio * 100)}% of the historical peak.` : "."),
     );
   }
@@ -216,11 +217,11 @@ export function buildUploadInsights(
 
   const summaryParts: string[] = [];
   summaryParts.push(
-    `Based on the ${historicalRows.length}-month series you uploaded${historicalPeak ? `, cases peaked at ${Math.round(historicalPeak.value).toLocaleString()} around ${historicalPeak.date}` : ""}.`,
+    `Based on the ${historicalRows.length}-month series you uploaded${historicalPeak ? `, cases peaked at ${Math.round(historicalPeak.value).toLocaleString()} around ${formatMonthName(historicalPeak.date)}` : ""}.`,
   );
   if (projectedRows.length > 0 && projectedPeak) {
     summaryParts.push(
-      `Over the next ${projectedRows.length} month${projectedRows.length === 1 ? "" : "s"}, the projection reaches roughly ${Math.round(projectedPeak.value).toLocaleString()} cases around ${projectedPeak.date}` +
+      `Over the next ${projectedRows.length} month${projectedRows.length === 1 ? "" : "s"}, the projection reaches roughly ${Math.round(projectedPeak.value).toLocaleString()} cases around ${formatMonthName(projectedPeak.date)}` +
         (peakRatio !== null ? ` — ${Math.round(peakRatio * 100)}% of the historical peak` : "") +
         (totalProjectedCases !== null ? `, with about ${Math.round(totalProjectedCases).toLocaleString()} projected cases in total over that window` : "") +
         `. By the end of the window the trajectory is ${trend === "unknown" ? "not yet clear" : trend}.`,

@@ -73,7 +73,10 @@ def forecast(request: ForecastRequest):
 def allocate(request: AllocationRequest):
     """Real implementation — risk-weighted linear-programming allocation. See
     app/allocation.py for the model and its current limitations."""
-    return optimise_allocation(request)
+    try:
+        return optimise_allocation(request)
+    except ValueError as exc:  # e.g. an equity floor the supply can't cover
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/simulate", response_model=SimulationResponse)

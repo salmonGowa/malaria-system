@@ -44,7 +44,11 @@ class ForecastGenerationService:
 
         return cases, rainfall, temperature, humidity
 
-    def generate_for_county(self, county, as_of_date, horizon_weeks=4, generated_by=None):
+    def predict_for_county(self, county, as_of_date, horizon_weeks=4):
+        """Run the model for one county and return ml_service's prediction
+        dict — nothing is stored. Shared by generate (which saves it) and
+        preview (which doesn't), so a preview is exactly what generating
+        with the same inputs would save."""
         cases, rainfall, temperature, humidity = self._recent_history(county, as_of_date)
         payload = {
             "county_code": county.code,
@@ -65,7 +69,10 @@ class ForecastGenerationService:
         if response.status_code >= 400:
             raise ForecastGenerationError(f"ml_service returned {response.status_code}: {response.text}")
 
-        data = response.json()
+        return response.json()
+
+    def generate_for_county(self, county, as_of_date, horizon_weeks=4, generated_by=None):
+        data = self.predict_for_county(county, as_of_date, horizon_weeks)
         return ForecastRun.objects.create(
             county=county,
             forecast_period_start=data["forecast_period_start"],
@@ -77,14 +84,40 @@ class ForecastGenerationService:
             generated_by=generated_by,
         )
 
-    def generate_for_counties(self, counties, as_of_date, horizon_weeks=4, generated_by=None):
-        """Never raises on one county's failure — a batch trigger across
-        every county shouldn't abort because one has too little history.
-        Returns (created: list[ForecastRun], errors: list[dict])."""
-        created, errors = [], []
+    @staticmethod
+    def _each_county(counties, run_one):
+        """Never raises on one county's failure — a batch across every county
+        shouldn't abort because one has too little history.
+        Returns (results: list, errors: list[dict])."""
+        results, errors = [], []
         for county in counties:
             try:
-                created.append(self.generate_for_county(county, as_of_date, horizon_weeks, generated_by=generated_by))
+                results.append(run_one(county))
             except (ForecastGenerationError, KeyError, ValueError) as exc:
                 errors.append({"county_code": county.code, "county_name": county.name, "error": str(exc)})
-        return created, errors
+        return results, errors
+
+    def generate_for_counties(self, counties, as_of_date, horizon_weeks=4, generated_by=None):
+        """Returns (created: list[ForecastRun], errors: list[dict])."""
+        return self._each_county(
+            counties, lambda c: self.generate_for_county(c, as_of_date, horizon_weeks, generated_by=generated_by)
+        )
+
+    def preview_for_counties(self, counties, as_of_date, horizon_weeks=4):
+        """Dry run: the same predictions generate_for_counties would store,
+        returned as plain dicts and never saved. Returns (previews, errors)."""
+
+        def preview_one(county):
+            data = self.predict_for_county(county, as_of_date, horizon_weeks)
+            return {
+                "county": county.id,
+                "county_name": county.name,
+                "forecast_period_start": data["forecast_period_start"],
+                "forecast_period_end": data["forecast_period_end"],
+                "predicted_cases": data["predicted_cases"],
+                "risk_score": data["risk_score"],
+                "model_name": data["model_name"],
+                "model_version": data["model_version"],
+            }
+
+        return self._each_county(counties, preview_one)
