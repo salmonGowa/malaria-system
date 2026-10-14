@@ -13,7 +13,7 @@ test.describe("landing page", () => {
     await expect(page.getByTestId("landing-page")).toBeVisible();
     // The authenticated app's sidebar/topbar must not be present here.
     await expect(page.locator(".sidebar")).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: "See the outbreak before it arrives." })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Predict outbreaks before the season peaks." })).toBeVisible();
   });
 
   test("nav CTA routes into the real dashboard", async ({ page }) => {
