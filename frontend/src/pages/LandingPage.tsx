@@ -5,9 +5,6 @@ import { MoonIcon, SunIcon } from "../components/icons";
 import { useTheme, type Theme } from "../lib/theme";
 import type { SceneTheme } from "../lib/mosquitoScene";
 
-// Follows the app-wide theme (lib/theme). ink-3 is the floor for any text:
-// 5.9:1 on the dark bg, 5.6:1 on the light one. Light mode deepens the
-// accents so gradient headings and the violet kickers still clear AA.
 const TOKENS: Record<Theme, CSSProperties> = {
   dark: {
     "--pk-bg": "#08070D",
@@ -51,12 +48,7 @@ const TOKENS: Record<Theme, CSSProperties> = {
   } as CSSProperties,
 };
 
-// Every figure here is checked against the codebase — no invented latencies
-// or lead times. Forecasts are monthly and county-level
-// (ml_service/models/forecast_metadata.json); "offline" means cached reads,
-// not offline case entry (see lib/useOnlineStatus.ts). Accent colours only
-// clear AA at large sizes, so stat values (24px+ bold) carry them as text;
-// pillars and steps carry them as a dot / ring next to ink-coloured text.
+
 const STATS = [
   { value: "14", label: "Lake-region & coastal counties", accent: "text-(--pk-peach)" },
   { value: "Monthly", label: "County-level risk forecasts", accent: "text-(--pk-violet)" },
@@ -275,7 +267,7 @@ export default function LandingPage() {
   useEffect(() => {
     const prevTitle = document.title;
     document.title =
-      "Kinga Sentinel — AI-assisted malaria tracking, forecasting & vaccine allocation";
+      "Kinga Sentinel";
     return () => {
       document.title = prevTitle;
     };

@@ -23,7 +23,7 @@ scripts/dev-up.sh            # start everything that isn't already up (idempoten
 scripts/dev-up.sh --no-frontend   # skip the frontend, just db + backend + ml_service
 scripts/dev-status.sh        # show what's up and what isn't
 scripts/dev-down.sh          # stop backend/ml_service/frontend (db left running)
-scripts/dev-down.sh --db     # also stop the db container
+scripts/dev-down.sh --db     # stop the db container
 ```
 
 `dev-up.sh` logs each service to `logs/{backend,ml_service,frontend}.log` and

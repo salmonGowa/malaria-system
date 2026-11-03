@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-/** Automated accessibility regression check (axe-core) across every route
+/** Automated accessibility regression check across every route
  * that doesn't need seeded data to render something meaningful. Not a
  * substitute for a real manual pass (keyboard-only navigation, a screen
  * reader) — axe catches maybe a third of real accessibility issues — but
